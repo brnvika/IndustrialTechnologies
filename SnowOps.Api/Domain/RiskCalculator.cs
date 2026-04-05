@@ -2,42 +2,32 @@ namespace SnowOps.Api.Domain;
 
 public static class RiskCalculator
 {
-    private static readonly Dictionary<string, int> TypeWeight = new(StringComparer.OrdinalIgnoreCase)
+    public static int Calculate(DefectType defectType, int coveragePercent, LocationType locationType, bool snowOrIceLast3h)
     {
-        ["Гололёд"] = 3,
-        ["Рыхлый снег или сугробы"] = 2,
-        ["Снежный вал у перехода"] = 1,
-        ["Норма"] = 0
-    };
+        int t = defectType switch
+        {
+            DefectType.Ice => 3,
+            DefectType.LooseSnow => 2,
+            DefectType.SnowBankAtCrosswalk => 1,
+            _ => 0
+        };
 
-    private static readonly Dictionary<string, int> LocationWeight = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Обычный переход"] = 0,
-        ["Остановка"] = 1,
-        ["Школа/поликлиника"] = 2
-    };
+        int s = coveragePercent switch
+        {
+            <= 30 => 1,
+            <= 60 => 2,
+            _ => 3
+        };
 
-    public static int Compute(string type, int coveragePercent, string locationType, bool snowOrIceLast3h)
-    {
-        var t = TypeWeight.GetValueOrDefault(type, 0);
-        var s = ComputeScale(coveragePercent);
-        var l = LocationWeight.GetValueOrDefault(locationType, 0);
-        var w = snowOrIceLast3h ? 1 : 0;
+        int l = locationType switch
+        {
+            LocationType.SchoolClinic => 2,
+            LocationType.BusStop => 1,
+            _ => 0
+        };
+
+        int w = snowOrIceLast3h ? 1 : 0;
+
         return (t * s) + l + w;
-    }
-
-    private static int ComputeScale(int coveragePercent)
-    {
-        if (coveragePercent <= 30)
-        {
-            return 1;
-        }
-
-        if (coveragePercent <= 60)
-        {
-            return 2;
-        }
-
-        return 3;
     }
 }
