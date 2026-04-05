@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SnowOps.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0c2f548f1413769b089f0a97ba3d51aa3eefa563")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8a81aba078dffdf4c86bd763af2aeb5d7e4fd8a3")]
 [assembly: System.Reflection.AssemblyProductAttribute("SnowOps.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SnowOps.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
