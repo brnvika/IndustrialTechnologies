@@ -266,19 +266,12 @@ app.MapGet("/api/defects/{id:guid}", async (Guid id, AppDbContext db, Cancellati
         AreaCode = d.AreaCode,
         AreaName = d.AreaName,
         DefectType = (int)d.DefectType,
-        DefectTypeName = d.DefectType == DefectType.Ice ? "Гололёд"
-            : d.DefectType == DefectType.LooseSnow ? "Рыхлый снег/сугробы"
-            : d.DefectType == DefectType.SnowBankAtCrosswalk ? "Снежный вал у перехода"
-            : "Норма",
+        DefectTypeName = d.DefectType.ToDisplayName(),
         CoveragePercent = d.CoveragePercent,
         LocationType = (int)d.LocationType,
-        LocationTypeName = d.LocationType == LocationType.SchoolClinic ? "Школа/поликлиника"
-            : d.LocationType == LocationType.BusStop ? "Остановка"
-            : "Обычный переход",
+        LocationTypeName = d.LocationType.ToDisplayName(),
         Status = (int)d.Status,
-        StatusName = d.Status == DefectStatus.Found ? "Found"
-            : d.Status == DefectStatus.InProgress ? "InProgress"
-            : "Fixed",
+        StatusName = d.Status.ToDisplayName(),
         RiskR = d.RiskR,
         OwnerUserId = d.OwnerUserId,
         OwnerLogin = d.Owner?.Login,

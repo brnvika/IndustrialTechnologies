@@ -35,3 +35,28 @@ public enum EventType : short
     Fixed = 2,
     PhotoAdded = 3
 }
+
+public static class EnumDisplayNames
+{
+    public static string ToDisplayName(this DefectType t) => t switch
+    {
+        DefectType.Ice => "Гололёд",
+        DefectType.LooseSnow => "Рыхлый снег/сугробы",
+        DefectType.SnowBankAtCrosswalk => "Снежный вал у перехода",
+        _ => "Норма"
+    };
+
+    public static string ToDisplayName(this LocationType l) => l switch
+    {
+        LocationType.SchoolClinic => "Школа/поликлиника",
+        LocationType.BusStop => "Остановка",
+        _ => "Обычный переход"
+    };
+
+    public static string ToDisplayName(this DefectStatus s) => s switch
+    {
+        DefectStatus.InProgress => "InProgress",
+        DefectStatus.Fixed => "Fixed",
+        _ => "Found"
+    };
+}

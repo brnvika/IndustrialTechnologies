@@ -4,7 +4,7 @@ using SnowOps.Api.Domain.Entities;
 
 namespace SnowOps.Api.Services;
 
-public sealed class PhotoService(IConfiguration config, ILogger<PhotoService> logger)
+public sealed class PhotoService(IConfiguration config)
 {
     private readonly string _basePath = config["Photos:BasePath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "data", "photos");
 
@@ -19,12 +19,12 @@ public sealed class PhotoService(IConfiguration config, ILogger<PhotoService> lo
 
         byte[] sha256Bytes;
         await using (var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write))
+        using (var sha256 = SHA256.Create())
+        await using (var cs = new CryptoStream(fs, sha256, CryptoStreamMode.Write))
         {
-            await file.CopyToAsync(fs, ct);
-        }
-        await using (var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read))
-        {
-            sha256Bytes = await SHA256.HashDataAsync(fs, ct);
+            await file.CopyToAsync(cs, ct);
+            await cs.FlushFinalBlockAsync(ct);
+            sha256Bytes = sha256.Hash!;
         }
 
         return new DefectPhoto
