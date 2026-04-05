@@ -1,0 +1,2615 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Defect Monitor — Web Prototype (Yandex Maps + Risk + Weather)</title>
+  <style>
+    :root{
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --primary:#2563eb;
+
+      --risk-red:#e53935;
+      --risk-yellow:#f9a825;
+      --risk-green:#43a047;
+
+      --shadow: 0 10px 20px rgba(17,24,39,.08);
+      --radius: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+
+      --sidebar-w: 264px;
+      --header-h: 64px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:var(--bg);
+    }
+
+    /* Layout */
+    .app{
+      display:grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-rows: var(--header-h) 1fr;
+      grid-template-areas:
+        "sidebar header"
+        "sidebar main";
+      height:100vh;
+    }
+    header{
+      grid-area: header;
+      position:sticky;
+      top:0;
+      z-index:20;
+      background:rgba(255,255,255,.85);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      padding: 10px 16px;
+    }
+    aside{
+      grid-area: sidebar;
+      background:#0b1220;
+      color:#e5e7eb;
+      padding:14px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      border-right:1px solid rgba(255,255,255,.06);
+    }
+    main{
+      grid-area: main;
+      overflow:auto;
+      padding: 16px;
+    }
+
+    /* Header */
+    .header-center{
+      flex:1;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      max-width: 940px;
+    }
+    .input, select{
+      height:40px;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      background:#fff;
+      padding: 0 12px;
+      font-size: 13px;
+      outline:none;
+    }
+    .input{flex:1}
+    select{min-width: 220px}
+    .header-right{
+      display:flex; align-items:center; gap:10px;
+      min-width: 540px;
+      justify-content:flex-end;
+    }
+    .shift{
+      display:flex; flex-direction:column; gap:2px;
+      padding: 6px 10px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fff;
+      min-width: 180px;
+    }
+    .shift .row{
+      display:flex; justify-content:space-between; gap:10px;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .shift .row strong{color:var(--text); font-family:var(--mono); font-size:12px}
+    .btn{
+      height:40px;
+      padding: 0 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      color:var(--text);
+      font-weight:700;
+      cursor:pointer;
+      font-size:13px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .btn.primary{
+      background: var(--primary);
+      border-color: var(--primary);
+      color:#fff;
+      box-shadow: 0 12px 24px rgba(37,99,235,.22);
+    }
+    .btn:disabled{opacity:.55; cursor:not-allowed}
+    .btn.sm{
+      height:32px;
+      border-radius:10px;
+      padding: 0 10px;
+      font-size:12px;
+    }
+    .icon-btn{
+      width:40px; height:40px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      cursor:pointer;
+      position:relative;
+    }
+    .badge-dot{
+      position:absolute; top:7px; right:8px;
+      width:18px; height:18px;
+      border-radius:999px;
+      background: #ef4444;
+      color:#fff;
+      font-size:11px;
+      display:flex; align-items:center; justify-content:center;
+      border:2px solid #fff;
+    }
+
+    /* Sidebar */
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      padding:6px 8px;
+    }
+    .brand .logo{
+      width:34px;height:34px;border-radius:10px;
+      background: linear-gradient(135deg,#60a5fa,#2563eb);
+      box-shadow: 0 8px 18px rgba(37,99,235,.35);
+    }
+    .brand .title{
+      display:flex; flex-direction:column; line-height:1.1;
+    }
+    .brand .title b{font-size:14px}
+    .brand .title span{font-size:12px; color:rgba(229,231,235,.70)}
+    .nav{
+      display:flex; flex-direction:column; gap:6px;
+      margin-top:6px;
+    }
+    .nav a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      color:#e5e7eb;
+      text-decoration:none;
+      font-size:13px;
+      border: 1px solid rgba(255,255,255,.06);
+      background: rgba(255,255,255,.03);
+    }
+    .nav a:hover{background: rgba(255,255,255,.06)}
+    .nav a.active{
+      background: rgba(37,99,235,.22);
+      border-color: rgba(37,99,235,.35);
+      box-shadow: 0 16px 28px rgba(0,0,0,.18);
+    }
+    .nav .dot{width:10px;height:10px;border-radius:999px;background:#93c5fd;}
+    .nav .label{flex:1}
+    .nav small{color: rgba(229,231,235,.7)}
+    .sidebar-footer{
+      margin-top:auto;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.06);
+      background: rgba(255,255,255,.03);
+      font-size:12px;
+      color: rgba(229,231,235,.85);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .pill{
+      font-family:var(--mono);
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      white-space:nowrap;
+    }
+
+    /* Page titles */
+    .page-title{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom: 12px;
+    }
+    .page-title h1{margin:0; font-size:18px}
+    .page-title p{margin:6px 0 0; color:var(--muted); font-size:13px}
+
+    .vision-card{
+      margin-bottom: 12px;
+      padding: 12px;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .vision-grid{
+      display:grid;
+      grid-template-columns: 220px 1fr;
+      gap: 12px;
+      align-items:start;
+    }
+    .vision-preview{
+      height: 180px;
+      border-radius: 14px;
+      border: 1px dashed #cbd5e1;
+      background: linear-gradient(135deg, rgba(37,99,235,.08), rgba(16,185,129,.08));
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      color: var(--muted);
+      font-size: 12px;
+      text-align:center;
+      padding: 12px;
+    }
+    .vision-preview img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .vision-result{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .vision-top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .vision-label{
+      font-size:18px;
+      font-weight:900;
+      color: var(--text);
+    }
+    .vision-confidence{
+      font-family:var(--mono);
+      font-size:12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background:#eef2ff;
+      color:#1d4ed8;
+      border:1px solid #dbe4ff;
+    }
+    .vision-meta{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      color: var(--muted);
+      font-size:12px;
+    }
+    .vision-scores{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .vision-score{
+      border:1px solid var(--border);
+      border-radius: 12px;
+      background:#fff;
+      padding: 8px 10px;
+      font-size:12px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .vision-score strong{font-family:var(--mono)}
+
+
+    /* Cards/sections */
+    .card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .divider{height:1px;background:var(--border); margin: 12px 0;}
+    .small{font-size:12px;color:var(--muted)}
+    .mono{font-family:var(--mono); font-size:12px}
+
+    /* Tabs / Right panel */
+    .panel{overflow:hidden; min-height: 680px; display:flex; flex-direction:column;}
+    .tabs{
+      display:flex; gap:6px; padding: 10px;
+      border-bottom:1px solid var(--border);
+      background: #fff;
+      border-top-left-radius: var(--radius);
+      border-top-right-radius: var(--radius);
+    }
+    .tab{
+      height:34px; padding:0 10px;
+      border-radius: 10px;
+      border:1px solid var(--border);
+      background:#fff;
+      cursor:pointer;
+      font-weight:800;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .tab.active{
+      background: rgba(37,99,235,.10);
+      border-color: rgba(37,99,235,.25);
+      color: #1d4ed8;
+    }
+    .panel-body{padding: 12px; display:none; flex:1; background:#fff;}
+    .panel-body.active{display:block}
+    .section h3{margin:0 0 8px; font-size:13px}
+    .field{display:flex; flex-direction:column; gap:6px; margin-bottom:10px;}
+    .field label{font-size:12px;color:var(--muted)}
+    .row2{display:grid; grid-template-columns: 1fr 1fr; gap:10px}
+
+    /* Status + risk pills */
+    .status{
+      font-size:12px;
+      padding:4px 8px;
+      border-radius: 999px;
+      font-weight:800;
+      border:1px solid var(--border);
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
+    }
+    .status.found{color: #1d4ed8; background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.18)}
+    .status.work{color: #92400e; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.24)}
+    .status.fixed{color: #065f46; background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.24)}
+
+    .risk-pill{
+      font-family:var(--mono);
+      font-size:12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      background:#fff;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .risk-dot{
+      width:10px;height:10px;border-radius:999px;border:2px solid #fff;
+      box-shadow: 0 8px 16px rgba(0,0,0,.14);
+    }
+    .risk-dot.red{background: var(--risk-red)}
+    .risk-dot.yellow{background: var(--risk-yellow)}
+    .risk-dot.green{background: var(--risk-green)}
+
+    /* MAP page layout */
+    .map-layout{
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap: 12px;
+      min-height: 680px;
+    }
+    .map-wrap{position:relative; min-height: 680px; overflow:hidden;}
+    .map{
+      width:100%;
+      height: 680px;
+      border-radius: var(--radius);
+      overflow:hidden;
+      border:1px solid var(--border);
+      box-shadow: var(--shadow);
+      background:#fff;
+    }
+    .legend{
+      position:absolute;
+      left:12px;
+      bottom:12px;
+      z-index:50;
+      background: rgba(255,255,255,.92);
+      border:1px solid var(--border);
+      border-radius: 14px;
+      padding:10px 12px;
+      display:flex;
+      gap:14px;
+      align-items:center;
+      font-size:12px;
+      color:var(--muted);
+      box-shadow: var(--shadow);
+      user-select:none;
+      pointer-events:none;
+    }
+    .legend .item{display:flex; gap:8px; align-items:center}
+    .chip{
+      width:10px;height:10px;border-radius:999px;
+      border:2px solid #fff;
+      box-shadow: 0 6px 16px rgba(0,0,0,.12);
+    }
+    .chip.red{background: var(--risk-red)}
+    .chip.yellow{background: var(--risk-yellow)}
+    .chip.green{background: var(--risk-green)}
+    .legend .muted{opacity:.75}
+
+    /* Table (tasks) */
+    .toolbar2{
+      display:flex; flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      margin: 12px 0;
+    }
+    .toolbar2 .left, .toolbar2 .right{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .toggle{
+      display:inline-flex;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      overflow:hidden;
+      background:#fff;
+      height:40px;
+    }
+    .toggle button{
+      border:0;
+      background:transparent;
+      padding: 0 12px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .toggle button.active{background: rgba(37,99,235,.10); color:#1d4ed8;}
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      overflow:hidden;
+      box-shadow: var(--shadow);
+    }
+    th,td{
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size:13px;
+      vertical-align:middle;
+    }
+    th{
+      font-size:12px;
+      color:var(--muted);
+      text-align:left;
+      background: #fbfbfc;
+      position:sticky; top:0;
+      z-index:2;
+    }
+    tr:last-child td{border-bottom:0}
+    .cell-actions{display:flex; gap:8px; align-items:center}
+
+    /* Journal + gallery */
+    .grid{display:grid; grid-template-columns: 1fr; gap: 10px;}
+    .j-card{
+      display:grid;
+      grid-template-columns: 160px 1fr;
+      gap:12px;
+      padding:12px;
+      align-items:center;
+    }
+    .thumb{
+      height:110px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background: linear-gradient(135deg, rgba(37,99,235,.12), rgba(16,185,129,.10));
+      display:flex; align-items:center; justify-content:center;
+      color:var(--muted);
+      font-size:12px;
+      position:relative;
+      overflow:hidden;
+      cursor:pointer;
+    }
+    .thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+    .thumb .plus{
+      position:absolute; right:8px; top:8px;
+      background: rgba(0,0,0,.55);
+      color:#fff;
+      padding:3px 7px;
+      border-radius:999px;
+      font-size:12px;
+    }
+    .j-meta{display:flex; flex-direction:column; gap:6px}
+    .j-head{display:flex; justify-content:space-between; gap:10px; align-items:center}
+    .j-head b{font-size:14px}
+    .line{display:flex; gap:10px; flex-wrap:wrap; color:var(--muted); font-size:13px}
+    .line strong{color:var(--text); font-weight:800}
+
+    /* Reports */
+    .kpis{
+      display:grid;
+      grid-template-columns: repeat(5, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .kpi{padding: 12px;}
+    .kpi .k{color:var(--muted); font-size:12px}
+    .kpi .v{font-size:20px; font-family:var(--mono); font-weight:900; margin-top: 6px;}
+    .report-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .block{padding: 12px;}
+    .block h3{margin:0 0 8px; font-size:13px}
+    .fake-chart{
+      height: 220px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background: linear-gradient(180deg,#fff,#f9fafb);
+      padding: 12px;
+      display:flex;
+      align-items:flex-end;
+      gap: 10px;
+    }
+    .bar{
+      width: 100%;
+      border-radius: 10px 10px 4px 4px;
+      background: rgba(37,99,235,.18);
+      border: 1px solid rgba(37,99,235,.25);
+      position:relative;
+    }
+    .bar span{
+      position:absolute;
+      bottom:100%;
+      left:50%;
+      transform:translate(-50%,-6px);
+      font-size:12px;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .mini-map-wrap{position:relative;}
+    .mini-map{
+      width:100%;
+      height: 260px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      overflow:hidden;
+      background:#fff;
+    }
+    .report-legend{
+      position:absolute;
+      left:10px;
+      bottom:10px;
+      z-index:30;
+      background: rgba(255,255,255,.92);
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding:8px 10px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      font-size:12px;
+      color:var(--muted);
+      box-shadow: var(--shadow);
+      pointer-events:none;
+      user-select:none;
+    }
+
+    /* Toast */
+    .toast{
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      padding: 10px 12px;
+      background:#111827;
+      color:#fff;
+      border-radius: 12px;
+      box-shadow: 0 18px 38px rgba(0,0,0,.25);
+      font-size: 13px;
+      display:none;
+      max-width: 460px;
+      z-index: 1400;
+    }
+
+    /* Modal */
+    .modal-backdrop{
+      position: fixed;
+      inset:0;
+      background: rgba(17,24,39,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:2000;
+      padding: 18px;
+    }
+    .modal{
+      width: min(820px, 100%);
+      background:#fff;
+      border-radius: 16px;
+      border:1px solid var(--border);
+      box-shadow: 0 26px 60px rgba(0,0,0,.28);
+      overflow:hidden;
+    }
+    .modal header{
+      position:unset;
+      background:#fff;
+      border-bottom:1px solid var(--border);
+      height:auto;
+      padding: 12px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .x{
+      width:34px;height:34px;border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      cursor:pointer;
+      font-weight:900;
+    }
+    .modal .content{padding: 12px 14px}
+    .drop{
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 12px;
+      background:#fbfdff;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .previews{display:flex; gap:10px; flex-wrap:wrap;}
+    .prev{
+      width:110px;height:80px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      overflow:hidden;
+      background:#fff;
+      position:relative;
+    }
+    .prev img{width:100%;height:100%;object-fit:cover;display:block}
+    .prev button{
+      position:absolute; top:6px; right:6px;
+      width:26px;height:26px;border-radius:10px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.92);
+      cursor:pointer;
+      font-weight:900;
+    }
+    textarea{
+      width:100%;
+      min-height: 96px;
+      resize: vertical;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size:13px;
+      outline:none;
+    }
+    .err{color:#b91c1c; font-size:12px; display:none; margin-top:6px;}
+    .invalid{border-color: rgba(185,28,28,.55) !important; box-shadow: 0 0 0 3px rgba(185,28,28,.10);}
+
+    /* Gallery modal */
+    .gallery{
+      display:grid;
+      grid-template-columns: 1fr 180px;
+      gap: 12px;
+      align-items:start;
+    }
+    .viewer{
+      border:1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg,#fff,#f9fafb);
+      overflow:hidden;
+      position:relative;
+      height: 460px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .viewer img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      background:#fff;
+    }
+    .viewer .navbtn{
+      position:absolute;
+      top:50%;
+      transform: translateY(-50%);
+      width:44px;
+      height:44px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.92);
+      cursor:pointer;
+      font-weight:900;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow: 0 12px 26px rgba(0,0,0,.14);
+      user-select:none;
+    }
+    .viewer .prevBtn{left:10px}
+    .viewer .nextBtn{right:10px}
+    .thumbs{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      max-height: 460px;
+      overflow:auto;
+      padding-right: 4px;
+    }
+    .thumbs button{
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding:0;
+      background:#fff;
+      cursor:pointer;
+      overflow:hidden;
+      height: 86px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .thumbs button.active{
+      outline: 3px solid rgba(37,99,235,.25);
+      border-color: rgba(37,99,235,.35);
+    }
+    .thumbs img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    /* Pages */
+    .page{display:none}
+    .page.active{display:block}
+
+    @media (max-width: 1120px){
+      .map-layout{grid-template-columns: 1fr}
+      .panel{min-height:auto}
+      .kpis{grid-template-columns: repeat(2, minmax(160px,1fr))}
+      .report-grid{grid-template-columns:1fr}
+      .header-right{min-width: 0}
+      .app{grid-template-columns: 82px 1fr}
+      aside{padding: 12px 10px}
+      .nav a .label, .nav a small{display:none}
+      .sidebar-footer{display:none}
+      .map{height:520px}
+      .gallery{grid-template-columns:1fr}
+      .viewer{height: 360px}
+      .thumbs{max-height:none; flex-direction:row; overflow:auto}
+      .thumbs button{width:120px; height:84px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="title">
+          <b>Defect Monitor</b>
+          <span>Risk + Weather demo</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <a href="#map" data-page="map" class="active"><span class="dot"></span><span class="label">Карта</span><small>API</small></a>
+        <a href="#tasks" data-page="tasks"><span class="dot"></span><span class="label">Задачи</span><small>Таблица</small></a>
+        <a href="#journal" data-page="journal"><span class="dot"></span><span class="label">Журнал 24 часа</span><small>Фото</small></a>
+        <a href="#reports" data-page="reports"><span class="dot"></span><span class="label">Отчётность</span><small>8 часов</small></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div>
+          <div style="font-weight:900">Пользователь</div>
+          <div style="color:rgba(229,231,235,.7); font-size:12px;" id="userName">brnvika</div>
+        </div>
+        <span class="pill" id="datePill">2026-03-29</span>
+      </div>
+    </aside>
+
+    <header>
+      <div class="header-center">
+        <select id="siteSelect" title="Площадка">
+          <option>Район (демо)</option>
+        </select>
+        <input class="input" id="searchInput" placeholder="Поиск: участок / ID дефекта / тип…" />
+      </div>
+
+      <div class="header-right">
+        <div class="shift">
+          <div class="row"><span>Смена</span><strong id="shiftTimer">08:00:00</strong></div>
+          <div class="row"><span>Старт</span><strong id="shiftStart">2026-03-29 08:00</strong></div>
+        </div>
+
+        <div class="shift" style="min-width: 210px;">
+          <div class="row"><span>Погода (3ч)</span><strong id="wTemp">—</strong></div>
+          <div class="row"><span>Осадки</span><strong id="wCond">—</strong></div>
+        </div>
+
+        <button class="btn primary" id="btnShiftReport">Сформировать ��тчёт</button>
+        <button class="icon-btn" title="Уведомления"><span class="badge-dot" id="notifCount">3</span></button>
+        <button class="icon-btn" title="Профиль"></button>
+      </div>
+    </header>
+
+    <main>
+      <!-- MAP -->
+      <section class="page active" id="page-map">
+        <div class="page-title">
+          <div>
+            <h1>Карта</h1>
+            <p>Риск: R=(T×S)+L+W. W берётся из погоды за последние 3 часа (Open‑Meteo).</p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn" id="btnWeather">Обновить погоду</button>
+            <button class="btn" id="btnGen">Сгенерировать точки</button>
+            <button class="btn" id="btnFit">Показать все</button>
+          </div>
+        </div>
+
+        <div class="vision-card">
+          <div class="vision-grid">
+            <div>
+              <div class="vision-preview" id="visionPreview">
+                <span id="visionPreviewHint">Загрузите фото дороги, чтобы определить тип покрова</span>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                <input type="file" id="visionFile" accept="image/*" />
+                <button class="btn sm primary" id="visionAnalyze">Определить</button>
+                <button class="btn sm" id="visionClear">Сброс</button>
+              </div>
+            </div>
+
+            <div class="vision-result">
+              <div class="vision-top">
+                <div class="vision-label" id="visionLabel">Результат анализа</div>
+                <div class="vision-confidence" id="visionConfidence">confidence —</div>
+              </div>
+
+              <div class="vision-meta" id="visionMeta">
+                <span>Ожидание фото</span>
+              </div>
+
+              <div class="vision-scores">
+                <div class="vision-score"><span>Гололёд</span><strong id="scoreIce">—</strong></div>
+                <div class="vision-score"><span>Рыхлый снег</span><strong id="scoreLoose">—</strong></div>
+                <div class="vision-score"><span>Сугробы</span><strong id="scoreDrift">—</strong></div>
+                <div class="vision-score"><span>Вал у перехода</span><strong id="scoreBank">—</strong></div>
+              </div>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                <button class="btn sm" id="visionApplyType" disabled>Подставить тип в фильтр</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="map-layout">
+          <div class="map-wrap">
+            <div class="map" id="mapMain" aria-label="Карта (главная)"></div>
+            <div class="legend">
+              <div class="item"><span class="chip red"></span> R &gt; 4 <span class="muted">High</span></div>
+              <div class="item"><span class="chip yellow"></span> 3–4 <span class="muted">Medium</span></div>
+              <div class="item"><span class="chip green"></span> R &lt; 3 <span class="muted">Low</span></div>
+              <div class="item" style="margin-left:6px; opacity:.9">⏳ в работе · ✓ устранено</div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="tabs">
+              <button class="tab active" data-tab="filters">Фильтры</button>
+              <button class="tab" data-tab="defect">Дефект</button>
+              <button class="tab" data-tab="history">История</button>
+            </div>
+
+            <div class="panel-body active" id="tab-filters">
+              <div class="section">
+                <h3>Статус</h3>
+                <div class="row2">
+                  <label class="small"><input type="checkbox" id="fFound" checked> Обнаружено</label>
+                  <label class="small"><input type="checkbox" id="fWork" checked> В работе</label>
+                  <label class="small"><input type="checkbox" id="fFixed" checked> Устранено</label>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="section">
+                <h3>Риск R</h3>
+                <div class="row2">
+                  <div class="field">
+                    <label>Мин</label>
+                    <input class="input" id="riskMin" type="number" step="1" value="0" />
+                  </div>
+                  <div class="field">
+                    <label>Макс</label>
+                    <input class="input" id="riskMax" type="number" step="1" value="10" />
+                  </div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button class="btn sm" id="presetHigh">High</button>
+                  <button class="btn sm" id="presetMid">Medium</button>
+                  <button class="btn sm" id="presetLow">Low</button>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="section">
+                <h3>Тип</h3>
+                <select id="typeFilter" style="width:100%" class="input">
+                  <option value="all">Все типы</option>
+                  <option value="Гололёд">Гололёд</option>
+                  <option value="Рыхлый снег или сугробы">Рыхлый снег или сугробы</option>
+                  <option value="Снежный вал у перехода">Снежный вал у перехода</option>
+                  <option value="Норма">Норма (чистый/уплотнённый покров)</option>
+                </select>
+              </div>
+
+              <div style="display:flex; gap:8px; margin-top: 12px;">
+                <button class="btn primary" id="applyFilters">Применить</button>
+                <button class="btn" id="clearFilters">Сбросить</button>
+              </div>
+
+              <div class="mono" style="margin-top:10px;" id="mapCount">Показано: —</div>
+            </div>
+
+            <div class="panel-body" id="tab-defect">
+              <div class="section">
+                <h3>Выбранный дефект</h3>
+                <div class="small" id="selHint">Выберите маркер на карте или строку в задачах.</div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="section" id="defectDetails" style="display:none;">
+                <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                  <b id="dTitle">Дефект #—</b>
+                  <span class="status found" id="dStatus">Обнаружено</span>
+                </div>
+
+                <div style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                  <span class="risk-pill" id="dRisk">
+                    <span class="risk-dot red"></span><span class="mono">—</span>
+                  </span>
+                  <span class="small" id="dArea">Участок: —</span>
+                </div>
+
+                <div class="row" style="border-top:0; padding:6px 0;">
+                  <span class="small">Тип</span><span id="dType">—</span>
+                </div>
+                <div class="row" style="padding:6px 0;">
+                  <span class="small">S (масштаб)</span><span id="dScale">—</span>
+                </div>
+                <div class="row" style="padding:6px 0;">
+                  <span class="small">L (локация)</span><span id="dLoc">—</span>
+                </div>
+                <div class="row" style="padding:6px 0;">
+                  <span class="small">W (погода)</span><span id="dW">—</span>
+                </div>
+
+                <div class="row" style="padding:6px 0;">
+                  <span class="small">Обнаружено</span><span id="dTime" class="mono">—</span>
+                </div>
+                <div class="row" style="padding:6px 0;">
+                  <span class="small">Ответственный</span><span id="dOwner">—</span>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top: 10px;">
+                  <button class="btn primary" id="dPrimary">Действие</button>
+                  <button class="btn" id="dToTasks">В задачах</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel-body" id="tab-history">
+              <div class="section">
+                <h3>История</h3>
+                <div class="small">Таймлайн (демо):</div>
+                <ul class="small" id="historyList" style="line-height:1.6; margin:10px 0 0; padding-left: 18px;">
+                  <li>Выберите дефект, чтобы увидеть историю.</li>
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- TASKS -->
+      <section class="page" id="page-tasks">
+        <div class="page-title">
+          <div>
+            <h1>Задачи</h1>
+            <p>Типы: гололёд/рыхлый снег/снежный вал/норма. Риск R целый.</p>
+          </div>
+        </div>
+
+        <div class="toolbar2">
+          <div class="left">
+            <div class="toggle" role="tablist" aria-label="Фильтр задач">
+              <button id="toggleAll" class="active">Все</button>
+              <button id="toggleMine">Мои</button>
+            </div>
+
+            <select id="tasksStatus" class="input">
+              <option value="all" selected>Все статусы</option>
+              <option value="found">Обнаружено</option>
+              <option value="work">В работе</option>
+              <option value="fixed">Устранено</option>
+            </select>
+
+            <select id="tasksType" class="input">
+              <option value="all" selected>Все типы</option>
+              <option value="Гололёд">Гололёд</option>
+              <option value="Рыхлый снег или сугробы">Рыхлый снег или сугробы</option>
+              <option value="Снежный вал у перехода">Снежный вал у перехода</option>
+              <option value="Норма">Норма</option>
+            </select>
+
+            <input id="tasksRiskMin" class="input" type="number" step="1" value="0" style="width:110px" />
+            <input id="tasksRiskMax" class="input" type="number" step="1" value="10" style="width:110px" />
+          </div>
+
+          <div class="right">
+            <button class="btn" id="exportCsv">Экспорт CSV</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:90px">ID</th>
+              <th>Участок</th>
+              <th style="width:220px">Тип</th>
+              <th style="width:120px">R</th>
+              <th style="width:140px">Статус</th>
+              <th style="width:170px">Обнаружено</th>
+              <th style="width:160px">Ответственный</th>
+              <th style="width:240px">Действия</th>
+            </tr>
+          </thead>
+          <tbody id="tasksBody"></tbody>
+        </table>
+      </section>
+
+      <!-- JOURNAL -->
+      <section class="page" id="page-journal">
+        <div class="page-title">
+          <div>
+            <h1>Журнал (последние 24 часа)</h1>
+            <p>Фото обязательны: записи всегда с фото, клик по фото открывает галерею.</p>
+          </div>
+        </div>
+
+        <div class="toolbar2">
+          <div class="left">
+            <select id="jStatus" class="input">
+              <option value="all" selected>Все статусы</option>
+              <option value="found">Обнаружено</option>
+              <option value="work">В работе</option>
+              <option value="fixed">Устранено</option>
+            </select>
+            <select id="jType" class="input">
+              <option value="all" selected>Все типы</option>
+              <option value="Гололёд">Гололёд</option>
+              <option value="Рыхлый снег или сугробы">Рыхлый снег или сугробы</option>
+              <option value="Снежный вал у перехода">Снежный вал у перехода</option>
+              <option value="Норма">Норма</option>
+            </select>
+            <input id="jSearch" class="input" placeholder="Поиск по участку/ID…" style="min-width:260px" />
+          </div>
+          <div class="right">
+            <span class="small" id="jCount">—</span>
+          </div>
+        </div>
+
+        <div class="grid" id="journalGrid"></div>
+      </section>
+
+      <!-- REPORTS -->
+      <section class="page" id="page-reports">
+        <div class="page-title">
+          <div>
+            <h1>Отчётность</h1>
+            <p>Карта: переключатели слоёв (High-risk / устранённые / неустранённые).</p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <select id="reportRange" class="input">
+              <option value="8h" selected>Текущая смена (8 часов)</option>
+              <option value="24h">Последние 24 часа</option>
+            </select>
+            <button class="btn" id="refreshReport">Обновить</button>
+          </div>
+        </div>
+
+        <div class="kpis" id="kpiGrid"></div>
+
+        <div class="report-grid">
+          <div class="card block">
+            <h3>Количество дефектов по типам</h3>
+            <div class="fake-chart" id="typeChart"></div>
+            <div class="small" id="typeTable" style="margin-top:10px;"></div>
+          </div>
+
+          <div class="card block">
+            <h3>Среднее время «обнаружено → устранено»</h3>
+            <div style="display:flex; gap:10px; align-items:baseline;">
+              <div class="kpi" style="padding:0">
+                <div class="k">Среднее</div>
+                <div class="v" id="avgFix">—</div>
+              </div>
+              <div class="kpi" style="padding:0">
+                <div class="k">Медиана</div>
+                <div class="v" id="medFix">—</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <h3>Карта отчёта</h3>
+
+            <div style="display:grid; gap:10px; margin-bottom:10px;">
+              <label class="small"><input type="checkbox" id="repOnlyHigh"> Показать только High-risk (R &gt; 4)</label>
+              <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <label class="small"><input type="checkbox" id="repShowFixed" checked> Показывать устранённые (✓)</label>
+                <label class="small"><input type="checkbox" id="repShowNotFixed" checked> Показывать неустранённые</label>
+              </div>
+            </div>
+
+            <div class="mini-map-wrap">
+              <div class="mini-map" id="mapReport" aria-label="Карта отчёта"></div>
+              <div class="report-legend">
+                <div class="item"><span class="chip red"></span> High</div>
+                <div class="item"><span class="chip yellow"></span> Medium</div>
+                <div class="item"><span class="chip green"></span> Low</div>
+                <div class="item" style="margin-left:6px; opacity:.9">✓ устранено</div>
+              </div>
+            </div>
+
+            <div class="small" style="margin-top:10px;" id="repCount">—</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Modal: Mark fixed -->
+  <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <header>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <b id="mTitle">Устранение дефекта #—</b>
+          <div class="small" id="mSub">Участок: — · Тип: — · Риск: —</div>
+        </div>
+        <button class="x" id="mClose" title="Закрыть">✕</button>
+      </header>
+
+      <div class="content">
+        <div class="section">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline;">
+            <h3 style="margin:0; font-size:13px;">Фото подтверждения (обязательно)</h3>
+            <span class="small">минимум 1 фото</span>
+          </div>
+
+          <div class="drop" id="dropZone" style="margin-top:8px;">
+            <div class="small">Перетащите файлы сюда или выберите через кнопку.</div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <input type="file" id="fileInput" accept="image/*" multiple />
+              <button class="btn sm" id="clearPhotos">Очистить фото</button>
+            </div>
+            <div class="previews" id="previews"></div>
+            <div class="err" id="errPhoto">Добавьте минимум одно фото.</div>
+          </div>
+        </div>
+
+        <div class="section" style="margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline;">
+            <h3 style="margin:0; font-size:13px;">Комментарий (обязательно)</h3>
+            <span class="small" id="charCount">0/500</span>
+          </div>
+          <textarea id="comment" maxlength="500" placeholder="Что сделано для устранения дефекта?"></textarea>
+          <div class="err" id="errComment">Комментарий обязателен.</div>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top: 12px;">
+          <button class="btn" id="mCancel">Отмена</button>
+          <button class="btn primary" id="mConfirm" disabled>Подтвердить устранение</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gallery -->
+  <div class="modal-backdrop" id="galleryBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <header>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <b id="gTitle">Галерея — дефект #—</b>
+          <div class="small" id="gSub">—</div>
+        </div>
+        <button class="x" id="gClose" title="Закрыть">✕</button>
+      </header>
+
+      <div class="content">
+        <div class="gallery">
+          <div class="viewer">
+            <button class="navbtn prevBtn" id="gPrev" title="Назад">‹</button>
+            <img id="gImage" alt="Фото дефекта" />
+            <button class="navbtn nextBtn" id="gNext" title="Вперёд">›</button>
+          </div>
+
+          <div>
+            <div class="small" style="margin-bottom:8px;">Фото</div>
+            <div class="thumbs" id="gThumbs"></div>
+            <div class="small" style="margin-top:10px;">Подсказки: ← →, Esc</div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 12px;">
+          <button class="btn" id="gOpenOnMap">Открыть на карте</button>
+          <button class="btn primary" id="gClose2">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // -------------------- CONFIG --------------------
+  const YANDEX_API_KEY = ""; // вставь ключ если требуется
+  const API_BASE = "http://localhost:5104/api";
+  const currentUser = "brnvika";
+
+  // фиксируем "текущее время" демо
+  const NOW = new Date("2026-03-29T12:00:00");
+  const SHIFT_START = new Date("2026-03-29T08:00:00");
+
+  // район (демо): центр Москвы (также используется для погоды)
+  const base = [55.751244, 37.618423];
+
+  // -------------------- DOMAIN: types, weights --------------------
+  const TYPES = [
+    "Гололёд",
+    "Рыхлый снег или сугробы",
+    "Снежный вал у перехода",
+    "Норма"
+  ];
+
+  const TYPE_WEIGHT = {
+    "Гололёд": 3,
+    "Рыхлый снег или сугробы": 2,
+    "Снежный вал у перехода": 1,
+    "Норма": 0
+  };
+
+  const LOCATION_TYPES = ["Обычный переход", "Остановка", "Школа/поликлиника"];
+  const LOCATION_WEIGHT = {
+    "Обычный переход": 0,
+    "Остановка": 1,
+    "Школа/поликлиника": 2
+  };
+
+  let apiOnline = false;
+
+  // -------------------- HELPERS --------------------
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
+  const pad = (n)=> String(n).padStart(2,"0");
+  function fmt(dt){
+    const d = new Date(dt);
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function toast(msg){
+    const t = $("#toast");
+    t.textContent = msg;
+    t.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=> t.style.display="none", 2400);
+  }
+  function riskBand(r){ return r > 4 ? "high" : r >= 3 ? "mid" : "low"; }
+  function riskColorClass(r){ return r > 4 ? "red" : r >= 3 ? "yellow" : "green"; }
+  function riskLabel(r){ return r > 4 ? "High" : r >= 3 ? "Medium" : "Low"; }
+  function statusText(s){ return s === "found" ? "Обнаружено" : s === "work" ? "В работе" : "Устранено"; }
+  function statusClass(s){ return s === "found" ? "found" : s === "work" ? "work" : "fixed"; }
+
+  function mapApiTaskToDefect(task){
+    return {
+      id: task.id,
+      area: task.zoneCode,
+      areaName: task.zoneName,
+      type: task.type,
+      coveragePercent: task.coveragePercent,
+      locationType: task.locationType || "Обычный переход",
+      risk: task.risk,
+      status: task.status,
+      owner: task.owner,
+      foundAt: task.foundAt,
+      fixedAt: task.fixedAt,
+      coords: [task.latitude, task.longitude],
+      photos: (task.photos && task.photos.length) ? task.photos : ["seed1"],
+      fixProof: task.fixComment ? { photosCount: (task.photos || []).length, comment: task.fixComment } : null
+    };
+  }
+
+  async function syncDefectsFromApi(){
+    try{
+      const res = await fetch(`${API_BASE}/tasks?snowOrIce=${weatherState.snowOrIceLast3h ? "true" : "false"}`);
+      if (!res.ok) throw new Error("tasks api failed");
+      const rows = await res.json();
+      const mapped = rows.map(mapApiTaskToDefect);
+
+      defects.splice(0, defects.length, ...mapped);
+      if (mapped.length){
+        nextId = Math.max(...mapped.map(x=>x.id), 1300) + 1;
+      }
+      apiOnline = true;
+    }catch(e){
+      console.warn("API недоступно, используем локальные данные", e);
+      apiOnline = false;
+    }
+  }
+
+  let visionPreviewUrl = null;
+  let visionAnalysis = null;
+  let visionImageFile = null;
+
+  const VISION_LABEL_TO_TYPE = {
+    "Гололёд": "Гололёд",
+    "Рыхлый снег": "Рыхлый снег или сугробы",
+    "Сугробы": "Рыхлый снег или сугробы",
+    "Снежный вал у перехода": "Снежный вал у перехода"
+  };
+
+  function resetVisionUI(){
+    visionAnalysis = null;
+    visionImageFile = null;
+
+    if (visionPreviewUrl){
+      URL.revokeObjectURL(visionPreviewUrl);
+      visionPreviewUrl = null;
+    }
+
+    const preview = $("#visionPreview");
+    preview.innerHTML = '<span id="visionPreviewHint">Загрузите фото дороги, чтобы определить тип покрова</span>';
+    $("#visionLabel").textContent = "Результат анализа";
+    $("#visionConfidence").textContent = "confidence —";
+    $("#visionMeta").innerHTML = '<span>Ожидание фото</span>';
+    $("#scoreIce").textContent = "—";
+    $("#scoreLoose").textContent = "—";
+    $("#scoreDrift").textContent = "—";
+    $("#scoreBank").textContent = "—";
+    $("#visionApplyType").disabled = true;
+    $("#visionFile").value = "";
+  }
+
+  function renderVisionResult(data){
+    visionAnalysis = data;
+    $("#visionLabel").textContent = data.label;
+    $("#visionConfidence").textContent = `confidence ${(data.confidence * 100).toFixed(1)}%`;
+    $("#visionMeta").innerHTML = [
+      `<span>${data.width}×${data.height}</span>`,
+      `<span>brightness ${(data.features?.brightness ?? 0).toFixed(3)}</span>`,
+      `<span>edge ${(data.features?.edgeDensity ?? 0).toFixed(3)}</span>`
+    ].join("");
+    $("#scoreIce").textContent = data.iceScore.toFixed(3);
+    $("#scoreLoose").textContent = data.looseSnowScore.toFixed(3);
+    $("#scoreDrift").textContent = data.snowdriftScore.toFixed(3);
+    $("#scoreBank").textContent = data.snowBankAtCrosswalkScore.toFixed(3);
+    $("#visionApplyType").disabled = !VISION_LABEL_TO_TYPE[data.label];
+  }
+
+  async function analyzeVisionPhoto(){
+    if (!visionImageFile){
+      toast("Сначала выберите фото");
+      return;
+    }
+
+    const form = new FormData();
+    form.append("photo", visionImageFile);
+
+    $("#visionAnalyze").disabled = true;
+    $("#visionAnalyze").textContent = "Анализ...";
+
+    try{
+      const res = await fetch(`${API_BASE}/vision/analyze`, {
+        method: "POST",
+        body: form
+      });
+
+      if (!res.ok){
+        throw new Error("vision analyze failed");
+      }
+
+      const data = await res.json();
+      renderVisionResult(data);
+      toast(`Определено: ${data.label}`);
+    }catch(e){
+      console.warn(e);
+      toast("Не удалось проанализировать фото");
+    }finally{
+      $("#visionAnalyze").disabled = false;
+      $("#visionAnalyze").textContent = "Определить";
+    }
+  }
+
+  function scaleS(coveragePercent){
+    if (coveragePercent <= 30) return 1;
+    if (coveragePercent <= 60) return 2;
+    return 3;
+  }
+
+  function computeRiskR(defect, weather){
+    const T = TYPE_WEIGHT[defect.type] ?? 0;
+    const S = scaleS(defect.coveragePercent ?? 0);
+    const L = LOCATION_WEIGHT[defect.locationType] ?? 0;
+    const W = weather?.snowOrIceLast3h ? 1 : 0;
+    return Math.round((T * S) + L + W);
+  }
+
+  // -------------------- WEATHER (Open-Meteo) --------------------
+  let weatherState = {
+    tempC: null,
+    precipitationLast3h: null,
+    snowOrIceLast3h: false,
+    updatedAt: null
+  };
+
+  async function fetchWeatherLast3h(lat, lon){
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${encodeURIComponent(lat)}` +
+      `&longitude=${encodeURIComponent(lon)}` +
+      `&current=temperature_2m,precipitation,weather_code` +
+      `&hourly=temperature_2m,precipitation,snowfall` +
+      `&past_days=1` +
+      `&forecast_days=1` +
+      `&timezone=auto`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("weather fetch failed");
+    const data = await res.json();
+
+    const curTemp = data?.current?.temperature_2m ?? null;
+
+    const times = data?.hourly?.time ?? [];
+    const precip = data?.hourly?.precipitation ?? [];
+    const snow = data?.hourly?.snowfall ?? [];
+
+    const n = times.length;
+    const last3 = [n-1, n-2, n-3].filter(i => i >= 0);
+
+    const precip3h = last3.reduce((sum,i)=> sum + (Number(precip[i]) || 0), 0);
+    const snow3h = last3.reduce((sum,i)=> sum + (Number(snow[i]) || 0), 0);
+
+    const snowOrIce = (snow3h > 0) || ((curTemp != null && curTemp <= 0) && precip3h > 0);
+
+    return {
+      tempC: curTemp,
+      precipitationLast3h: precip3h,
+      snowOrIceLast3h: snowOrIce,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function renderWeather(){
+    const t = weatherState.tempC;
+    $("#wTemp").textContent = (t==null) ? "—" : `${t.toFixed(1)}°C`;
+    $("#wCond").textContent = weatherState.snowOrIceLast3h ? "снег/гололёд" : "нет";
+  }
+
+  function recalcAllRisks(){
+    defects.forEach(d=>{
+      d.risk = computeRiskR(d, weatherState);
+    });
+  }
+
+  async function initWeather(){
+    try{
+      $("#wTemp").textContent = "…";
+      $("#wCond").textContent = "…";
+      const w = await fetchWeatherLast3h(base[0], base[1]);
+      weatherState = { ...weatherState, ...w };
+      renderWeather();
+      await syncDefectsFromApi();
+      if (!apiOnline) recalcAllRisks();
+
+      renderMainMap();
+      renderTasks();
+      renderJournal();
+      renderReport();
+
+      toast("Погода обновлена, риск пересчитан");
+    }catch(e){
+      console.warn(e);
+      $("#wTemp").textContent = "—";
+      $("#wCond").textContent = "ошибка";
+      toast("Не удалось загрузить погоду (проверь интернет)");
+    }
+  }
+
+  // -------------------- RANDOM DATA --------------------
+  const rand = (min,max)=> Math.random()*(max-min)+min;
+  function jitterCoords(center, km){
+    const lat = center[0], lon = center[1];
+    const dLat = (km/111) * rand(-1,1);
+    const dLon = (km/(111*Math.cos(lat*Math.PI/180))) * rand(-1,1);
+    return [lat + dLat, lon + dLon];
+  }
+
+  const AREAS = ["A-01","A-03","A-08","A-12","B-02","B-07","C-04","C-11"];
+  let nextId = 1300;
+
+  function makeRandomDefect(){
+    const type = TYPES[Math.floor(Math.random()*TYPES.length)];
+    const coveragePercent = Math.round(rand(5, 100));
+    const locationType = LOCATION_TYPES[Math.floor(Math.random()*LOCATION_TYPES.length)];
+
+    const status = Math.random() < 0.55 ? "found" : (Math.random() < 0.65 ? "work" : "fixed");
+    const owner = status === "work"
+      ? (Math.random() < 0.55 ? currentUser : (Math.random() < 0.5 ? "petrov" : "ivanov"))
+      : (status === "fixed" ? (Math.random() < 0.5 ? "petrov" : "ivanov") : null);
+
+    const foundAt = new Date(NOW.getTime() - rand(10, 23*60) * 60000);
+    let fixedAt = null;
+    if (status === "fixed"){
+      fixedAt = new Date(foundAt.getTime() + rand(10, 220) * 60000);
+      if (fixedAt > NOW) fixedAt = new Date(NOW.getTime() - rand(2, 60) * 60000);
+    }
+
+    const photos = [`seed${Math.floor(rand(1,6))}`];
+    if (Math.random() < 0.45){
+      const extra = Math.floor(rand(1,4));
+      for (let i=0;i<extra;i++) photos.push(`seed${Math.floor(rand(1,6))}`);
+    }
+
+    const d = {
+      id: nextId++,
+      area: AREAS[Math.floor(Math.random()*AREAS.length)],
+      areaName: "Участок (демо)",
+      type,
+      coveragePercent,
+      locationType,
+      status,
+      owner,
+      foundAt: foundAt.toISOString(),
+      fixedAt: fixedAt ? fixedAt.toISOString() : null,
+      coords: jitterCoords(base, 6),
+      photos,
+      fixProof: null,
+      risk: 0
+    };
+    return d;
+  }
+
+  const defects = [
+    { id: 1204, area:"A-12", areaName:"Северная линия", type:"Гололёд",  coveragePercent: 75, locationType:"Остановка", risk:0, status:"found", owner:null, coords:jitterCoords(base, 2), foundAt:"2026-03-29T10:12:00", fixedAt:null, photos:["seed4","seed1"], fixProof:null },
+    { id: 1205, area:"A-03", areaName:"Узел 3",         type:"Рыхлый снег или сугробы", coveragePercent: 55, locationType:"Обычный переход", risk:0, status:"work",  owner:currentUser, coords:jitterCoords(base, 2), foundAt:"2026-03-29T09:40:00", fixedAt:null, photos:["seed1"], fixProof:null },
+    { id: 1206, area:"B-07", areaName:"Южный сектор",   type:"Снежный вал у перехода", coveragePercent: 35, locationType:"Школа/поликлиника", risk:0, status:"fixed", owner:"ivanov", coords:jitterCoords(base, 2), foundAt:"2026-03-29T07:55:00", fixedAt:"2026-03-29T09:10:00", photos:["seed2","seed3","seed5"], fixProof:{photosCount:3, comment:"Устранено (демо)"} },
+    { id: 1208, area:"B-02", areaName:"Резервуар",      type:"Норма", coveragePercent: 10, locationType:"Остановка", risk:0, status:"work",  owner:"petrov", coords:jitterCoords(base, 2), foundAt:"2026-03-29T08:30:00", fixedAt:null, photos:["seed5","seed4"], fixProof:null },
+    ...Array.from({length: 18}, ()=> makeRandomDefect())
+  ];
+
+  // -------------------- NAV --------------------
+  function showPage(page){
+    $$(".page").forEach(p => p.classList.remove("active"));
+    $("#page-"+page).classList.add("active");
+    $$("#nav a").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+    location.hash = page;
+
+    if (page === "reports") renderReport();
+    if (page === "map") setTimeout(()=>{ mapMain && mapMain.container.fitToViewport(); }, 0);
+  }
+  $$("#nav a").forEach(a=>{
+    a.addEventListener("click", (e)=>{
+      e.preventDefault();
+      showPage(a.dataset.page);
+    });
+  });
+
+  // -------------------- YANDEX MAPS LOADER --------------------
+  function loadYMaps(){
+    return new Promise((resolve, reject)=>{
+      const s = document.createElement("script");
+      const keyPart = YANDEX_API_KEY ? `&apikey=${encodeURIComponent(YANDEX_API_KEY)}` : "";
+      s.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${keyPart}`;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Не удалось загрузить Яндекс.Карты API"));
+      document.head.appendChild(s);
+    });
+  }
+
+  // -------------------- MAPS STATE --------------------
+  let mapMain = null, clustererMain = null;
+  let mapReport = null, clustererReport = null;
+  let selectedId = null;
+
+  function iconContent(d){
+    if (d.status === "work") return "⏳";
+    if (d.status === "fixed") return "✓";
+    return "";
+  }
+  function markerPreset(d){
+    if (d.status === "fixed") return "islands#grayIcon";
+    const band = riskBand(d.risk);
+    if (band === "high") return "islands#redIcon";
+    if (band === "mid") return "islands#yellowIcon";
+    return "islands#greenIcon";
+  }
+
+  function passesMapFilters(d){
+    const fFound = $("#fFound").checked;
+    const fWork  = $("#fWork").checked;
+    const fFixed = $("#fFixed").checked;
+    if (d.status === "found" && !fFound) return false;
+    if (d.status === "work" && !fWork) return false;
+    if (d.status === "fixed" && !fFixed) return false;
+
+    const min = parseInt($("#riskMin").value || "0", 10);
+    const max = parseInt($("#riskMax").value || "999", 10);
+    if (d.risk < min || d.risk > max) return false;
+
+    const tf = $("#typeFilter").value;
+    if (tf !== "all" && d.type !== tf) return false;
+
+    return true;
+  }
+
+  function createPlacemark(d){
+    const S = scaleS(d.coveragePercent);
+    const L = LOCATION_WEIGHT[d.locationType] ?? 0;
+    const W = weatherState.snowOrIceLast3h ? 1 : 0;
+
+    const pm = new ymaps.Placemark(d.coords, {
+      defectId: d.id,
+      hintContent: `#${d.id} · ${d.area} · R ${d.risk} · ${statusText(d.status)}`,
+      balloonContentHeader: `<b>Дефект #${d.id}</b>`,
+      balloonContentBody:
+        `Участок: ${d.area} — ${d.areaName}<br/>Тип: ${d.type}<br/>` +
+        `Масштаб: ${d.coveragePercent}% (S=${S})<br/>` +
+        `Локация: ${d.locationType} (L=${L})<br/>` +
+        `Погода: ${(W? "снег/гололёд":"нет")} (W=${W})<br/>` +
+        `Риск: <b>R=${d.risk}</b><br/>` +
+        `Статус: ${statusText(d.status)}<br/>Ответственный: ${d.owner ?? "не назначен"}<br/>` +
+        `<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">` +
+          `<button data-act="take" data-id="${d.id}" style="padding:6px 10px;border-radius:10px;border:1px solid #e5e7eb;background:#2563eb;color:#fff;font-weight:800;cursor:pointer;${d.status!=="found"?"display:none":""}">Взять в работу</button>` +
+          `<button data-act="fix" data-id="${d.id}" style="padding:6px 10px;border-radius:10px;border:1px solid #e5e7eb;background:#2563eb;color:#fff;font-weight:800;cursor:pointer;${d.status!=="work"?"display:none":""}">Отметить устранённым</button>` +
+        `</div>`,
+      iconContent: iconContent(d)
+    }, {
+      preset: markerPreset(d),
+      iconContentLayout: ymaps.templateLayoutFactory.createClass(
+        '<div style="font-weight:900; color:#111827; transform:translateY(-2px); text-shadow:0 1px 0 rgba(255,255,255,.75)">$[properties.iconContent]</div>'
+      ),
+    });
+
+    pm.events.add("click", ()=> selectDefect(d.id));
+    pm.events.add("balloonopen", ()=>{
+      setTimeout(()=>{
+        const balloonEl = document.querySelector(".ymaps-2-1-79-balloon__content");
+        if (!balloonEl) return;
+        balloonEl.onclick = (e)=>{
+          const btn = e.target.closest("button[data-act]");
+          if (!btn) return;
+          const id = parseInt(btn.dataset.id, 10);
+          const act = btn.dataset.act;
+          if (act === "take") takeInWork(id);
+          if (act === "fix") openFixModal(id);
+        };
+      }, 0);
+    });
+
+    return pm;
+  }
+
+  function renderMainMap(){
+    if (!mapMain || !clustererMain) return;
+    clustererMain.removeAll();
+
+    const visible = defects.filter(passesMapFilters);
+    const pms = visible.map(d => createPlacemark(d));
+    clustererMain.add(pms);
+
+    $("#mapCount").textContent = `Показано: ${visible.length}`;
+
+    if (pms.length){
+      const bounds = clustererMain.getBounds();
+      if (bounds) mapMain.setBounds(bounds, {checkZoomRange:true, zoomMargin: 44});
+    }
+  }
+
+  // -------------------- SELECT DEFECT (right panel) --------------------
+  function setStatusUI(el, s){
+    el.classList.remove("found","work","fixed");
+    el.classList.add(statusClass(s));
+    el.textContent = statusText(s);
+  }
+  function setRiskUI(container, risk){
+    const dot = container.querySelector(".risk-dot");
+    dot.classList.remove("red","yellow","green");
+    dot.classList.add(riskColorClass(risk));
+    container.querySelector(".mono").textContent = String(risk);
+  }
+  function openDefectTab(){
+    $$(".tab").forEach(x=>x.classList.remove("active"));
+    $('.tab[data-tab="defect"]').classList.add("active");
+    $$(".panel-body").forEach(b=>b.classList.remove("active"));
+    $("#tab-defect").classList.add("active");
+  }
+
+  function selectDefect(id){
+    selectedId = id;
+    const d = defects.find(x=>x.id===id);
+    if (!d) return;
+
+    $("#selHint").style.display = "none";
+    $("#defectDetails").style.display = "block";
+
+    $("#dTitle").textContent = `Дефект #${d.id}`;
+    setStatusUI($("#dStatus"), d.status);
+    setRiskUI($("#dRisk"), d.risk);
+
+    $("#dArea").textContent = `Участок: ${d.area} — ${d.areaName}`;
+    $("#dType").textContent = d.type;
+    $("#dTime").textContent = fmt(d.foundAt);
+    $("#dOwner").textContent = d.owner || "не назначен";
+
+    const S = scaleS(d.coveragePercent);
+    const L = LOCATION_WEIGHT[d.locationType] ?? 0;
+    const W = weatherState.snowOrIceLast3h ? 1 : 0;
+
+    $("#dScale").textContent = `${d.coveragePercent}% (S=${S})`;
+    $("#dLoc").textContent = `${d.locationType} (L=${L})`;
+    $("#dW").textContent = `${(W ? "снег/гололёд" : "нет")} (W=${W})`;
+
+    // History
+    const h = $("#historyList");
+    h.innerHTML = "";
+    h.insertAdjacentHTML("beforeend", `<li><span class="mono">${fmt(d.foundAt)}</span> — Обнаружено</li>`);
+    if (d.status !== "found"){
+      h.insertAdjacentHTML("beforeend", `<li><span class="mono">${fmt(new Date(new Date(d.foundAt).getTime()+25*60000))}</span> — В работе (${d.owner || "—"})</li>`);
+    }
+    if (d.status === "fixed" && d.fixedAt){
+      h.insertAdjacentHTML("beforeend", `<li><span class="mono">${fmt(d.fixedAt)}</span> — Устранено</li>`);
+    }
+
+    const label =
+      d.status === "found" ? "Взять в работу" :
+      d.status === "work"  ? "Отметить устранённым" :
+      "Уже устранено";
+    $("#dPrimary").textContent = label;
+
+    if (d.status === "fixed"){
+      $("#dPrimary").disabled = true;
+      $("#dPrimary").title = "Дефект уже устранён";
+    } else if (d.status === "work" && d.owner !== currentUser){
+      $("#dPrimary").disabled = true;
+      $("#dPrimary").title = "Доступно только ответственному";
+    } else {
+      $("#dPrimary").disabled = false;
+      $("#dPrimary").title = "";
+    }
+
+    if ($("#page-map").classList.contains("active") && mapMain){
+      mapMain.setCenter(d.coords, Math.max(mapMain.getZoom(), 14), {duration: 250});
+      openDefectTab();
+    }
+  }
+
+  function primaryAction(){
+    const d = defects.find(x=>x.id===selectedId);
+    if (!d) return;
+    if (d.status === "found") takeInWork(d.id);
+    else if (d.status === "work") openFixModal(d.id);
+  }
+
+  // -------------------- ACTIONS --------------------
+  async function takeInWork(id){
+    const d = defects.find(x=>x.id===id);
+    if (!d || d.status !== "found") return;
+
+    if (apiOnline){
+      try{
+        const res = await fetch(`${API_BASE}/tasks/${id}/take?snowOrIce=${weatherState.snowOrIceLast3h ? "true" : "false"}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employee: currentUser })
+        });
+        if (!res.ok) throw new Error("take failed");
+        Object.assign(d, mapApiTaskToDefect(await res.json()));
+      }catch(e){
+        console.warn(e);
+        toast("Ошибка API: не удалось взять задачу");
+        return;
+      }
+    } else {
+      d.status = "work";
+      d.owner = currentUser;
+    }
+
+    toast(`Дефект #${id} взят в работу вами`);
+
+    renderMainMap();
+    renderTasks();
+    renderJournal();
+    renderReport();
+
+    if (selectedId === id) selectDefect(id);
+  }
+
+  // -------------------- MODAL (fix) --------------------
+  const modal = $("#modalBackdrop");
+  let modalId = null;
+  let modalPhotos = []; // {file,url}
+
+  function openFixModal(id){
+    const d = defects.find(x=>x.id===id);
+    if (!d) return;
+    if (d.status !== "work"){ toast("Устранение доступно только из статуса «В работе»"); return; }
+    if (d.owner !== currentUser){ toast("Нельзя отметить устранённым: вы не ответственный"); return; }
+
+    modalId = id;
+    modalPhotos.forEach(p => URL.revokeObjectURL(p.url));
+    modalPhotos = [];
+    $("#previews").innerHTML = "";
+    $("#comment").value = "";
+    $("#charCount").textContent = "0/500";
+
+    $("#errPhoto").style.display = "none";
+    $("#errComment").style.display = "none";
+    $("#dropZone").classList.remove("invalid");
+    $("#comment").classList.remove("invalid");
+
+    $("#mTitle").textContent = `Устранение дефекта #${d.id}`;
+    $("#mSub").textContent = `Участок: ${d.area} · Тип: ${d.type} · R=${d.risk}`;
+
+    modal.style.display = "flex";
+    updateConfirmState();
+  }
+
+  function closeModal(){
+    modal.style.display = "none";
+    modalId = null;
+    modalPhotos.forEach(p => URL.revokeObjectURL(p.url));
+    modalPhotos = [];
+  }
+
+  function updateConfirmState(){
+    const hasPhoto = modalPhotos.length > 0;
+    const hasComment = $("#comment").value.trim().length > 0;
+    $("#mConfirm").disabled = !(hasPhoto && hasComment);
+  }
+
+  function addFiles(files){
+    for (const f of files){
+      if (!f.type.startsWith("image/")) continue;
+      const url = URL.createObjectURL(f);
+      modalPhotos.push({file:f, url});
+    }
+    renderPreviews();
+    $("#errPhoto").style.display = "none";
+    $("#dropZone").classList.remove("invalid");
+    updateConfirmState();
+  }
+
+  function renderPreviews(){
+    const wrap = $("#previews");
+    wrap.innerHTML = "";
+    modalPhotos.slice(0,5).forEach((p, idx)=>{
+      const d = document.createElement("div");
+      d.className = "prev";
+      d.innerHTML = `<img alt="Фото ${idx+1}" src="${p.url}"><button title="Удалить">✕</button>`;
+      d.querySelector("button").onclick = ()=>{
+        URL.revokeObjectURL(p.url);
+        modalPhotos.splice(idx,1);
+        renderPreviews();
+        updateConfirmState();
+      };
+      wrap.appendChild(d);
+    });
+  }
+
+  $("#mClose").onclick = closeModal;
+  $("#mCancel").onclick = closeModal;
+  modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
+
+  const dropZone = $("#dropZone");
+  dropZone.addEventListener("dragover", (e)=>{ e.preventDefault(); dropZone.style.background="#f0f9ff"; });
+  dropZone.addEventListener("dragleave", ()=>{ dropZone.style.background="#fbfdff"; });
+  dropZone.addEventListener("drop", (e)=>{
+    e.preventDefault();
+    dropZone.style.background="#fbfdff";
+    addFiles(e.dataTransfer.files);
+  });
+
+  $("#fileInput").addEventListener("change", (e)=>{
+    addFiles(e.target.files);
+    e.target.value = "";
+  });
+  $("#clearPhotos").onclick = ()=>{
+    modalPhotos.forEach(p => URL.revokeObjectURL(p.url));
+    modalPhotos = [];
+    renderPreviews();
+    updateConfirmState();
+  };
+
+  $("#comment").addEventListener("input", ()=>{
+    const v = $("#comment").value;
+    $("#charCount").textContent = `${v.length}/500`;
+    $("#errComment").style.display = "none";
+    $("#comment").classList.remove("invalid");
+    updateConfirmState();
+  });
+
+  $("#mConfirm").onclick = async ()=>{
+    const hasPhoto = modalPhotos.length > 0;
+    const hasComment = $("#comment").value.trim().length > 0;
+
+    if (!hasPhoto){ $("#errPhoto").style.display = "block"; $("#dropZone").classList.add("invalid"); }
+    if (!hasComment){ $("#errComment").style.display = "block"; $("#comment").classList.add("invalid"); }
+    if (!(hasPhoto && hasComment)) return;
+
+    const d = defects.find(x=>x.id===modalId);
+
+    if (apiOnline){
+      try{
+        const payload = {
+          employee: currentUser,
+          comment: $("#comment").value.trim(),
+          photoUrls: modalPhotos.map(() => "uploaded")
+        };
+        const res = await fetch(`${API_BASE}/tasks/${modalId}/fix?snowOrIce=${weatherState.snowOrIceLast3h ? "true" : "false"}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("fix failed");
+        Object.assign(d, mapApiTaskToDefect(await res.json()));
+      }catch(e){
+        console.warn(e);
+        toast("Ошибка API: не удалось закрыть задачу");
+        return;
+      }
+    } else {
+      d.status = "fixed";
+      d.fixedAt = NOW.toISOString();
+      d.fixProof = { photosCount: modalPhotos.length, comment: $("#comment").value.trim() };
+      d.photos = (d.photos || []);
+      d.photos.push("uploaded");
+    }
+
+    toast(`Дефект #${modalId} отмечен устранённым`);
+    closeModal();
+
+    renderMainMap();
+    renderTasks();
+    renderJournal();
+    renderReport();
+
+    if (selectedId === d.id) selectDefect(d.id);
+  };
+
+  // -------------------- TASKS --------------------
+  let tasksMine = false;
+
+  $("#toggleAll").onclick = ()=>{
+    tasksMine = false;
+    $("#toggleAll").classList.add("active");
+    $("#toggleMine").classList.remove("active");
+    renderTasks();
+  };
+  $("#toggleMine").onclick = ()=>{
+    tasksMine = true;
+    $("#toggleMine").classList.add("active");
+    $("#toggleAll").classList.remove("active");
+    renderTasks();
+  };
+
+  $("#tasksStatus").onchange = renderTasks;
+  $("#tasksType").onchange = renderTasks;
+  $("#tasksRiskMin").oninput = renderTasks;
+  $("#tasksRiskMax").oninput = renderTasks;
+
+  function taskPasses(d){
+    if (tasksMine && d.owner !== currentUser) return false;
+    const s = $("#tasksStatus").value;
+    if (s !== "all" && d.status !== s) return false;
+    const t = $("#tasksType").value;
+    if (t !== "all" && d.type !== t) return false;
+    const min = parseInt($("#tasksRiskMin").value || "0", 10);
+    const max = parseInt($("#tasksRiskMax").value || "999", 10);
+    if (d.risk < min || d.risk > max) return false;
+    return true;
+  }
+
+  function renderTasks(){
+    const body = $("#tasksBody");
+    body.innerHTML = "";
+    const list = defects.filter(taskPasses).sort((a,b)=> b.risk - a.risk);
+
+    list.forEach(d=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">#${d.id}</td>
+        <td><b>${d.area}</b> <span class="small">— ${d.areaName}</span></td>
+        <td>${d.type}</td>
+        <td>
+          <span class="risk-pill">
+            <span class="risk-dot ${riskColorClass(d.risk)}"></span>
+            <span class="mono">${d.risk}</span>
+          </span>
+        </td>
+        <td><span class="status ${statusClass(d.status)}">${statusText(d.status)}</span></td>
+        <td class="mono">${fmt(d.foundAt)}</td>
+        <td>${d.owner ? d.owner : '<span class="small">не назначен</span>'}</td>
+        <td class="cell-actions"></td>
+      `;
+
+      tr.addEventListener("click", (e)=>{
+        if (e.target.tagName === "BUTTON") return;
+        showPage("map");
+        selectDefect(d.id);
+        toast(`Открыт дефект #${d.id} на карте`);
+      });
+
+      const actions = tr.querySelector(".cell-actions");
+
+      if (d.status === "found"){
+        const b = document.createElement("button");
+        b.className = "btn sm primary";
+        b.textContent = "Взять в работу";
+        b.onclick = (e)=>{ e.stopPropagation(); takeInWork(d.id); };
+        actions.appendChild(b);
+      } else if (d.status === "work"){
+        const b = document.createElement("button");
+        b.className = "btn sm primary";
+        b.textContent = "Отметить устранённым";
+        if (d.owner !== currentUser){
+          b.disabled = true;
+          b.title = "Доступно только ответственному";
+        }
+        b.onclick = (e)=>{ e.stopPropagation(); openFixModal(d.id); };
+        actions.appendChild(b);
+      } else {
+        const b = document.createElement("button");
+        b.className = "btn sm";
+        b.textContent = "Просмотр";
+        b.onclick = (e)=>{ e.stopPropagation(); showPage("map"); selectDefect(d.id); };
+        actions.appendChild(b);
+      }
+
+      body.appendChild(tr);
+    });
+  }
+
+  $("#exportCsv").onclick = ()=>{
+    const rows = defects.map(d=>({
+      id: d.id,
+      area: d.area,
+      type: d.type,
+      coveragePercent: d.coveragePercent,
+      locationType: d.locationType,
+      R: d.risk,
+      status: statusText(d.status),
+      foundAt: fmt(d.foundAt),
+      owner: d.owner || ""
+    }));
+    const header = Object.keys(rows[0]).join(",");
+    const csv = header + "\n" + rows.map(r => Object.values(r).map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tasks.csv";
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    toast("CSV экспортирован (демо)");
+  };
+
+  // -------------------- JOURNAL + GALLERY --------------------
+  $("#jStatus").onchange = renderJournal;
+  $("#jType").onchange = renderJournal;
+  $("#jSearch").oninput = renderJournal;
+
+  function seedImage(seed){
+    const colors = {
+      seed1:["#93c5fd","#2563eb"],
+      seed2:["#a7f3d0","#10b981"],
+      seed3:["#fde68a","#f59e0b"],
+      seed4:["#fecaca","#ef4444"],
+      seed5:["#ddd6fe","#7c3aed"],
+      uploaded:["#e5e7eb","#9ca3af"]
+    }[seed] || ["#e5e7eb","#9ca3af"];
+
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="640" height="420">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="${colors[0]}"/>
+            <stop offset="1" stop-color="${colors[1]}"/>
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#g)"/>
+        <circle cx="520" cy="90" r="56" fill="rgba(255,255,255,.35)"/>
+        <rect x="70" y="250" width="520" height="46" rx="16" fill="rgba(255,255,255,.35)"/>
+        <text x="90" y="280" font-family="Arial" font-size="22" fill="rgba(17,24,39,.65)">Фото дефекта (демо)</text>
+      </svg>`;
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+
+  function journalPasses(d){
+    const t = new Date(d.foundAt);
+    if (t < new Date(NOW.getTime() - 24*60*60000)) return false;
+    if (!d.photos || d.photos.length === 0) return false;
+
+    const s = $("#jStatus").value;
+    if (s !== "all" && d.status !== s) return false;
+
+    const tp = $("#jType").value;
+    if (tp !== "all" && d.type !== tp) return false;
+
+    const q = ($("#jSearch").value || "").trim().toLowerCase();
+    if (q){
+      const hay = `${d.id} ${d.area} ${d.areaName} ${d.type}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }
+
+  function renderJournal(){
+    const grid = $("#journalGrid");
+    grid.innerHTML = "";
+
+    const list = defects.filter(journalPasses)
+      .sort((a,b)=> new Date(b.foundAt) - new Date(a.foundAt));
+
+    $("#jCount").textContent = `Записей: ${list.length}`;
+
+    list.forEach(d=>{
+      const card = document.createElement("div");
+      card.className = "card j-card";
+
+      const first = seedImage(d.photos[0]);
+
+      card.innerHTML = `
+        <div class="thumb" title="Открыть галерею">
+          <img alt="Фото дефекта #${d.id}" src="${first}">
+          ${d.photos.length>1 ? `<span class="plus">+${d.photos.length-1}</span>` : ""}
+        </div>
+        <div class="j-meta">
+          <div class="j-head">
+            <b>Дефект #${d.id} — ${d.type}</b>
+            <span class="status ${statusClass(d.status)}">${statusText(d.status)}</span>
+          </div>
+          <div class="line">
+            <span><strong>Участок:</strong> ${d.area} — ${d.areaName}</span>
+            <span class="risk-pill" style="padding:2px 8px;">
+              <span class="risk-dot ${riskColorClass(d.risk)}"></span>
+              <span class="mono">${d.risk}</span>
+            </span>
+            <span><strong>Время:</strong> <span class="mono">${fmt(d.foundAt)}</span></span>
+            <span><strong>Локация:</strong> ${d.locationType}</span>
+            <span><strong>Покрытие:</strong> ${d.coveragePercent}%</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${d.status==="found" ? `<button class="btn sm primary" data-act="take">Взять в работу</button>` : ""}
+            ${d.status==="work"  ? `<button class="btn sm primary" data-act="fix" ${d.owner!==currentUser?'disabled title="Доступно только ответственному"':''}>Отметить устранённым</button>` : ""}
+            <button class="btn sm" data-act="open">Открыть на карте</button>
+          </div>
+        </div>
+      `;
+
+      card.querySelector(".thumb").addEventListener("click", ()=>{
+        openGallery(d.id, 0);
+      });
+
+      card.querySelectorAll("button").forEach(b=>{
+        b.addEventListener("click",(e)=>{
+          e.stopPropagation();
+          const act = b.dataset.act;
+          if (act==="take") takeInWork(d.id);
+          if (act==="fix") openFixModal(d.id);
+          if (act==="open"){
+            showPage("map");
+            selectDefect(d.id);
+            toast(`Открыт дефект #${d.id}`);
+          }
+        });
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  // Gallery state
+  const galleryBackdrop = $("#galleryBackdrop");
+  let galleryDefectId = null;
+  let galleryIndex = 0;
+
+  function openGallery(defectId, startIndex=0){
+    const d = defects.find(x=>x.id===defectId);
+    if (!d || !d.photos || d.photos.length===0) return;
+
+    galleryDefectId = defectId;
+    galleryIndex = Math.max(0, Math.min(startIndex, d.photos.length-1));
+
+    $("#gTitle").textContent = `Галерея — дефект #${d.id}`;
+    $("#gSub").textContent = `${d.area} — ${d.areaName} · ${d.type} · R=${d.risk}`;
+
+    renderGallery();
+    galleryBackdrop.style.display = "flex";
+  }
+
+  function closeGallery(){
+    galleryBackdrop.style.display = "none";
+    galleryDefectId = null;
+    galleryIndex = 0;
+  }
+
+  function renderGallery(){
+    const d = defects.find(x=>x.id===galleryDefectId);
+    if (!d) return;
+
+    const urls = d.photos.map(seedImage);
+    $("#gImage").src = urls[galleryIndex];
+    $("#gImage").alt = `Фото ${galleryIndex+1} из ${urls.length}`;
+
+    const thumbs = $("#gThumbs");
+    thumbs.innerHTML = "";
+    urls.forEach((u, idx)=>{
+      const btn = document.createElement("button");
+      btn.className = idx===galleryIndex ? "active" : "";
+      btn.innerHTML = `<img alt="Миниатюра ${idx+1}" src="${u}">`;
+      btn.onclick = ()=>{ galleryIndex = idx; renderGallery(); };
+      thumbs.appendChild(btn);
+    });
+
+    $("#gPrev").disabled = (urls.length<=1);
+    $("#gNext").disabled = (urls.length<=1);
+  }
+
+  function galleryPrev(){
+    const d = defects.find(x=>x.id===galleryDefectId);
+    if (!d) return;
+    galleryIndex = (galleryIndex - 1 + d.photos.length) % d.photos.length;
+    renderGallery();
+  }
+  function galleryNext(){
+    const d = defects.find(x=>x.id===galleryDefectId);
+    if (!d) return;
+    galleryIndex = (galleryIndex + 1) % d.photos.length;
+    renderGallery();
+  }
+
+  $("#gClose").onclick = closeGallery;
+  $("#gClose2").onclick = closeGallery;
+  $("#gPrev").onclick = galleryPrev;
+  $("#gNext").onclick = galleryNext;
+  $("#gOpenOnMap").onclick = ()=>{
+    const id = galleryDefectId;
+    closeGallery();
+    if (!id) return;
+    showPage("map");
+    selectDefect(id);
+  };
+
+  galleryBackdrop.addEventListener("click",(e)=>{ if (e.target===galleryBackdrop) closeGallery(); });
+  document.addEventListener("keydown", (e)=>{
+    if (galleryBackdrop.style.display !== "flex") return;
+    if (e.key === "Escape") closeGallery();
+    if (e.key === "ArrowLeft") galleryPrev();
+    if (e.key === "ArrowRight") galleryNext();
+  });
+
+  // -------------------- REPORTS --------------------
+  function computeReport(range){
+    const from = new Date(NOW);
+    if (range === "8h") from.setHours(from.getHours()-8);
+    if (range === "24h") from.setHours(from.getHours()-24);
+
+    const inRange = defects.filter(d => new Date(d.foundAt) >= from && new Date(d.foundAt) <= NOW);
+    const total = inRange.length;
+    const fixed = inRange.filter(d=>d.status==="fixed").length;
+    const work  = inRange.filter(d=>d.status==="work").length;
+    const high  = inRange.filter(d=>d.risk>4).length;
+
+    const fixedWithTime = inRange.filter(d=>d.status==="fixed" && d.fixedAt);
+    const mins = fixedWithTime.map(d => (new Date(d.fixedAt) - new Date(d.foundAt)) / 60000).filter(x=>x>=0).sort((a,b)=>a-b);
+    const avg = mins.length ? mins.reduce((a,b)=>a+b,0)/mins.length : null;
+    const med = mins.length ? (mins.length%2 ? mins[(mins.length-1)/2] : (mins[mins.length/2-1]+mins[mins.length/2])/2) : null;
+
+    const byType = {};
+    inRange.forEach(d => { byType[d.type] = (byType[d.type]||0) + 1; });
+
+    return { from, inRange, total, fixed, work, high, avg, med, byType };
+  }
+  function mmToHHMM(m){
+    const h = Math.floor(m/60);
+    const mm = Math.round(m%60);
+    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  }
+
+  function reportPasses(d){
+    const onlyHigh = $("#repOnlyHigh").checked;
+    const showFixed = $("#repShowFixed").checked;
+    const showNotFixed = $("#repShowNotFixed").checked;
+
+    if (onlyHigh && !(d.risk > 4)) return false;
+
+    const isFixed = d.status === "fixed";
+    if (isFixed && !showFixed) return false;
+    if (!isFixed && !showNotFixed) return false;
+
+    return true;
+  }
+
+  function renderReport(){
+    const range = $("#reportRange").value;
+    const r = computeReport(range);
+
+    const kpis = [
+      {k:"Всего", v:String(r.total)},
+      {k:"Устранено", v:String(r.fixed)},
+      {k:"В работе", v:String(r.work)},
+      {k:"High-risk (R>4)", v:String(r.high)},
+      {k:"W", v: weatherState.snowOrIceLast3h ? "1" : "0"}
+    ];
+
+    const grid = $("#kpiGrid");
+    grid.innerHTML = "";
+    kpis.forEach(x=>{
+      const d = document.createElement("div");
+      d.className = "card kpi";
+      d.innerHTML = `<div class="k">${x.k}</div><div class="v">${x.v}</div>`;
+      grid.appendChild(d);
+    });
+
+    $("#avgFix").textContent = r.avg==null ? "—" : mmToHHMM(r.avg);
+    $("#medFix").textContent = r.med==null ? "—" : mmToHHMM(r.med);
+
+    const chart = $("#typeChart");
+    chart.innerHTML = "";
+    const entries = Object.entries(r.byType);
+    const max = Math.max(1, ...entries.map(([,v])=>v));
+    entries.forEach(([k,v])=>{
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = (v/max*100) + "%";
+      bar.innerHTML = `<span>${k}: ${v}</span>`;
+      chart.appendChild(bar);
+    });
+
+    const table = $("#typeTable");
+    if (!entries.length){
+      table.textContent = "Нет данных за период.";
+    } else {
+      const total = entries.reduce((a,[,v])=>a+v,0);
+      table.innerHTML = entries.map(([k,v])=>{
+        const p = Math.round(v/total*100);
+        return `<div style="display:flex; justify-content:space-between; gap:10px; border-top:1px solid var(--border); padding:8px 0;">
+          <span>${k}</span><span class="mono">${v} (${p}%)</span>
+        </div>`;
+      }).join("");
+    }
+
+    if (mapReport && clustererReport){
+      renderReportMap(r.inRange);
+    }
+  }
+
+  function renderReportMap(inRange){
+    clustererReport.removeAll();
+    const visible = inRange.filter(reportPasses);
+
+    const pms = visible.map(d => {
+      const pm = new ymaps.Placemark(d.coords, {
+        hintContent: `#${d.id} · ${d.area} · R ${d.risk} · ${statusText(d.status)}`,
+        balloonContentHeader: `<b>Дефект #${d.id}</b>`,
+        balloonContentBody:
+          `Участок: ${d.area}<br/>Тип: ${d.type}<br/>R=${d.risk}<br/>Статус: ${statusText(d.status)}`,
+        iconContent: iconContent(d)
+      }, {
+        preset: markerPreset(d),
+        iconContentLayout: ymaps.templateLayoutFactory.createClass(
+          '<div style="font-weight:900; color:#111827; transform:translateY(-2px); text-shadow:0 1px 0 rgba(255,255,255,.75)">$[properties.iconContent]</div>'
+        ),
+      });
+      return pm;
+    });
+
+    clustererReport.add(pms);
+    $("#repCount").textContent = `На карте отчёта: ${visible.length} / ${inRange.length}`;
+
+    if (pms.length){
+      const bounds = clustererReport.getBounds();
+      if (bounds) mapReport.setBounds(bounds, {checkZoomRange:true, zoomMargin: 36});
+    }
+  }
+
+  $("#reportRange").onchange = renderReport;
+  $("#refreshReport").onclick = renderReport;
+  $("#repOnlyHigh").onchange = renderReport;
+  $("#repShowFixed").onchange = renderReport;
+  $("#repShowNotFixed").onchange = renderReport;
+
+  // -------------------- MAP FILTER UI --------------------
+  $("#applyFilters").onclick = renderMainMap;
+  $("#clearFilters").onclick = ()=>{
+    $("#fFound").checked = true;
+    $("#fWork").checked = true;
+    $("#fFixed").checked = true;
+    $("#riskMin").value = 0;
+    $("#riskMax").value = 10;
+    $("#typeFilter").value = "all";
+    renderMainMap();
+  };
+  $("#presetHigh").onclick = ()=>{ $("#riskMin").value = 5; $("#riskMax").value = 999; renderMainMap(); };
+  $("#presetMid").onclick  = ()=>{ $("#riskMin").value = 3; $("#riskMax").value = 4;  renderMainMap(); };
+  $("#presetLow").onclick  = ()=>{ $("#riskMin").value = 0; $("#riskMax").value = 2;  renderMainMap(); };
+
+  // Tabs
+  $$(".tab").forEach(t=>{
+    t.addEventListener("click", ()=>{
+      $$(".tab").forEach(x=>x.classList.remove("active"));
+      t.classList.add("active");
+      const name = t.dataset.tab;
+      $$(".panel-body").forEach(b=>b.classList.remove("active"));
+      $("#tab-"+name).classList.add("active");
+    });
+  });
+
+  $("#dPrimary").onclick = primaryAction;
+  $("#dToTasks").onclick = ()=> showPage("tasks");
+
+  // -------------------- TOP ACTIONS --------------------
+  $("#btnShiftReport").onclick = ()=>{
+    showPage("reports");
+    toast("Открыт отчёт по смене (демо)");
+  };
+  $("#btnFit").onclick = ()=> renderMainMap();
+  $("#btnGen").onclick = ()=>{
+    for (let i=0;i<20;i++) defects.push(makeRandomDefect());
+    recalcAllRisks();
+    toast("Добавлено 20 рандомных точек (R пересчитан)");
+    renderMainMap();
+    renderTasks();
+    renderJournal();
+    renderReport();
+  };
+  $("#btnWeather").onclick = initWeather;
+
+  $("#visionFile").addEventListener("change", (e)=>{
+    const file = e.target.files?.[0];
+    visionImageFile = file || null;
+
+    if (visionPreviewUrl){
+      URL.revokeObjectURL(visionPreviewUrl);
+      visionPreviewUrl = null;
+    }
+
+    if (!file){
+      resetVisionUI();
+      return;
+    }
+
+    visionPreviewUrl = URL.createObjectURL(file);
+    $("#visionPreview").innerHTML = `<img alt="Фото дорожного покрова" src="${visionPreviewUrl}">`;
+    $("#visionLabel").textContent = file.name;
+    $("#visionConfidence").textContent = "готово к анализу";
+    $("#visionMeta").innerHTML = `<span>${file.type || "image"}</span><span>${Math.round(file.size / 1024)} KB</span>`;
+    $("#visionApplyType").disabled = true;
+  });
+
+  $("#visionAnalyze").onclick = analyzeVisionPhoto;
+  $("#visionClear").onclick = resetVisionUI;
+  $("#visionApplyType").onclick = ()=>{
+    if (!visionAnalysis) return;
+    const mappedType = VISION_LABEL_TO_TYPE[visionAnalysis.label];
+    if (!mappedType) return;
+    $("#typeFilter").value = mappedType;
+    renderMainMap();
+    toast(`Фильтр установлен: ${mappedType}`);
+  };
+
+  $("#searchInput").addEventListener("input", ()=>{
+    const q = $("#searchInput").value.trim().toLowerCase();
+    if (!q) return;
+    const hit = defects.find(d => `${d.id} ${d.area} ${d.areaName} ${d.type}`.toLowerCase().includes(q));
+    if (hit){
+      showPage("map");
+      selectDefect(hit.id);
+    }
+  });
+
+  // -------------------- SHIFT TIMER (static demo) --------------------
+  function renderShiftTimer(){
+    const ms = Math.max(0, NOW - SHIFT_START);
+    const s = Math.floor(ms/1000);
+    const hh = pad(Math.floor(s/3600));
+    const mm = pad(Math.floor((s%3600)/60));
+    const ss = pad(s%60);
+    $("#shiftTimer").textContent = `${hh}:${mm}:${ss}`;
+    $("#shiftStart").textContent = fmt(SHIFT_START);
+    $("#datePill").textContent = "2026-03-29";
+    $("#userName").textContent = currentUser;
+  }
+
+  // -------------------- INIT MAPS --------------------
+  async function initMaps(){
+    await loadYMaps();
+    await new Promise(res => ymaps.ready(res));
+
+    mapMain = new ymaps.Map("mapMain", {
+      center: base,
+      zoom: 12,
+      controls: ["zoomControl","typeSelector","fullscreenControl"]
+    });
+    clustererMain = new ymaps.Clusterer({
+      preset: "islands#invertedBlueClusterIcons",
+      groupByCoordinates: false,
+      clusterDisableClickZoom: false,
+      clusterOpenBalloonOnClick: true,
+    });
+    mapMain.geoObjects.add(clustererMain);
+
+    mapReport = new ymaps.Map("mapReport", {
+      center: base,
+      zoom: 11,
+      controls: ["zoomControl"]
+    });
+    clustererReport = new ymaps.Clusterer({
+      preset: "islands#invertedBlueClusterIcons",
+      groupByCoordinates: false,
+      clusterDisableClickZoom: true,
+      clusterOpenBalloonOnClick: true,
+    });
+    mapReport.geoObjects.add(clustererReport);
+
+    // риски пересчитаем после погоды (ниже), но сейчас инициализируем хоть чем-то:
+    recalcAllRisks();
+
+    renderMainMap();
+    renderReport();
+
+    selectDefect(defects[0].id);
+  }
+
+  // -------------------- INIT UI --------------------
+  function initUI(){
+    renderShiftTimer();
+    renderTasks();
+    renderJournal();
+    renderWeather();
+    resetVisionUI();
+  }
+
+  // -------------------- BOOT --------------------
+  (async ()=>{
+    await syncDefectsFromApi();
+    if (!apiOnline) recalcAllRisks();
+
+    initUI();
+    initMaps()
+      .then(()=> initWeather())
+      .catch(err=>{
+        console.error(err);
+        alert("Не удалось загрузить Яндекс.Карты. Проверь интернет и (при необходимости) API-ключ.");
+      });
+  })();
+</script>
+</body>
+</html>
