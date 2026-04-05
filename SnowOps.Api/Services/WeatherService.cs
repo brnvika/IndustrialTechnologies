@@ -97,7 +97,7 @@ public sealed class WeatherService(AppDbContext db, HttpClient http, ILogger<Wea
             }
         }
 
-        if (snow3h > 0 || precip3h > 0 && tempC <= 2)
+        if (snow3h > 0 || (precip3h > 0 && tempC <= 2))
             snowOrIce = true;
 
         return new WeatherObservation
