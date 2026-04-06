@@ -34,6 +34,10 @@ On startup API auto-creates schema and adds demo seed data.
 ## Endpoints
 
 - `GET /api/health`
+- `POST /api/users/register`
+- `POST /api/users/login`
+- `GET /api/users/me` with Bearer token
+- `GET /api/users/me/profile` with Bearer token
 - `GET /api/zones`
 - `POST /api/zones`
 - `GET /api/tasks?snowOrIce=true&status=work&owner=brnvika&type=Гололёд&minRisk=3&maxRisk=10`
@@ -44,6 +48,36 @@ On startup API auto-creates schema and adds demo seed data.
 - `GET /api/work-reports?hours=24`
 - `GET /api/reports/summary?hours=8&snowOrIce=true`
 - `POST /api/vision/analyze` with `multipart/form-data` and field `photo`
+
+## User registration
+
+Register a user before using the app:
+
+```json
+{
+  "login": "brnvika",
+  "password": "secret123"
+}
+```
+
+Example request:
+
+```powershell
+curl -X POST http://localhost:5104/api/users/register ^
+  -H "Content-Type: application/json" ^
+  -d "{\"login\":\"brnvika\",\"password\":\"secret123\"}"
+```
+
+Login:
+
+```json
+{
+  "login": "brnvika",
+  "password": "secret123"
+}
+```
+
+Use the returned `accessToken` as `Authorization: Bearer <token>` when taking a defect into work, uploading photos, or marking it fixed.
 
 ## Example payloads
 

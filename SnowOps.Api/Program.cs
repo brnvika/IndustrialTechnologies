@@ -1,4 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SnowOps.Api.Contracts;
 using SnowOps.Api.Data;
 using SnowOps.Api.Domain;
@@ -12,6 +18,28 @@ builder.Services.AddOpenApi();
 var connStr = builder.Configuration.GetConnectionString("Postgres")!;
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(connStr));
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SnowOps.Api";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "SnowOps.Api";
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"]
+    ?? throw new InvalidOperationException("Jwt:SigningKey is missing");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<WeatherService>();
@@ -38,6 +66,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("frontend");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Run EF Core migrations on startup
 using (var scope = app.Services.CreateScope())
@@ -48,6 +78,92 @@ using (var scope = app.Services.CreateScope())
 
 // ── Health ──────────────────────────────────────────────────────────────────
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SnowOps.Api" }));
+
+// ── Users ───────────────────────────────────────────────────────────────────
+app.MapPost("/api/users/register", async (RegisterUserRequest req, UserService userService, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Login))
+        return Results.BadRequest(new { error = "Login обязателен" });
+
+    if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
+        return Results.BadRequest(new { error = "Password должен быть не короче 6 символов" });
+
+    var user = await userService.RegisterAsync(req.Login, req.Password, ct);
+    if (user is null)
+        return Results.Conflict(new { error = "Пользователь с таким логином уже существует" });
+
+    var token = CreateToken(user, jwtIssuer, jwtAudience, jwtSigningKey);
+    return Results.Created($"/api/users/{user.Id}", new AuthResponse
+    {
+        AccessToken = token,
+        User = ToUserDto(user)
+    });
+});
+
+app.MapPost("/api/users/login", async (LoginRequest req, UserService userService, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Login) || string.IsNullOrWhiteSpace(req.Password))
+        return Results.BadRequest(new { error = "Login и Password обязательны" });
+
+    var user = await userService.AuthenticateAsync(req.Login, req.Password, ct);
+    if (user is null)
+        return Results.Unauthorized();
+
+    return Results.Ok(new AuthResponse
+    {
+        AccessToken = CreateToken(user, jwtIssuer, jwtAudience, jwtSigningKey),
+        User = ToUserDto(user)
+    });
+});
+
+app.MapGet("/api/users/me", async (HttpContext httpContext, AppDbContext db, CancellationToken ct) =>
+{
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
+        return Results.Unauthorized();
+
+    return Results.Ok(ToUserDto(user));
+}).RequireAuthorization();
+
+app.MapGet("/api/users/me/profile", async (HttpContext httpContext, AppDbContext db, CancellationToken ct) =>
+{
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
+        return Results.Unauthorized();
+
+    var ownedDefects = await db.Defects
+        .Where(d => d.OwnerUserId == user.Id)
+        .Select(d => new
+        {
+            d.Status,
+            d.FoundAt,
+            d.FixedAt
+        })
+        .ToListAsync(ct);
+
+    var createdEventsCount = await db.DefectEvents.CountAsync(e => e.ActorUserId == user.Id && e.EventType == EventType.Created, ct);
+
+    var profile = new UserProfileDto
+    {
+        User = ToUserDto(user),
+        OwnedDefectsCount = ownedDefects.Count,
+        InProgressDefectsCount = ownedDefects.Count(d => d.Status == DefectStatus.InProgress),
+        FixedDefectsCount = ownedDefects.Count(d => d.Status == DefectStatus.Fixed),
+        CreatedEventsCount = createdEventsCount,
+        LastTakenAt = await db.DefectEvents
+            .Where(e => e.ActorUserId == user.Id && e.EventType == EventType.TakenInWork)
+            .OrderByDescending(e => e.CreatedAt)
+            .Select(e => (DateTimeOffset?)e.CreatedAt)
+            .FirstOrDefaultAsync(ct),
+        LastFixedAt = ownedDefects
+            .Where(d => d.FixedAt.HasValue)
+            .OrderByDescending(d => d.FixedAt)
+            .Select(d => d.FixedAt)
+            .FirstOrDefault()
+    };
+
+    return Results.Ok(profile);
+}).RequireAuthorization();
 
 // ── Districts ───────────────────────────────────────────────────────────────
 app.MapGet("/api/districts", async (AppDbContext db) =>
@@ -128,11 +244,12 @@ app.MapGet("/api/defects", async (
     string? bbox,
     HttpContext httpContext,
     AppDbContext db,
-    UserService userService,
     CancellationToken ct) =>
 {
     if (districtId is null)
         return Results.BadRequest(new { error = "districtId обязателен" });
+
+    AppUser? currentUser = null;
 
     var query = db.Defects
         .Include(d => d.Owner)
@@ -177,12 +294,11 @@ app.MapGet("/api/defects", async (
         }
         else if (owner.Equals("me", StringComparison.OrdinalIgnoreCase))
         {
-            var login = httpContext.Request.Headers["X-User-Login"].ToString();
-            if (!string.IsNullOrWhiteSpace(login))
-            {
-                var me = await userService.GetOrCreateAsync(login, ct);
-                query = query.Where(d => d.OwnerUserId == me.Id);
-            }
+            currentUser ??= await GetCurrentUserAsync(httpContext.User, db, ct);
+            if (currentUser is null)
+                return Results.Unauthorized();
+
+            query = query.Where(d => d.OwnerUserId == currentUser.Id);
         }
         else
         {
@@ -319,11 +435,9 @@ app.MapPost("/api/defects", async (
     WeatherService weatherService,
     CancellationToken ct) =>
 {
-    var login = httpContext.Request.Headers["X-User-Login"].ToString();
-    if (string.IsNullOrWhiteSpace(login))
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
         return Results.Unauthorized();
-
-    var user = await userService.GetOrCreateAsync(login, ct);
 
     var district = await db.Districts.FindAsync([req.DistrictId], ct);
     if (district is null)
@@ -374,7 +488,7 @@ app.MapPost("/api/defects", async (
     await db.SaveChangesAsync(ct);
 
     return Results.Created($"/api/defects/{defect.Id}", new { id = defect.Id, publicId = defect.PublicId });
-});
+}).RequireAuthorization();
 
 app.MapPost("/api/defects/{id:guid}/take", async (
     Guid id,
@@ -383,11 +497,9 @@ app.MapPost("/api/defects/{id:guid}/take", async (
     UserService userService,
     CancellationToken ct) =>
 {
-    var login = httpContext.Request.Headers["X-User-Login"].ToString();
-    if (string.IsNullOrWhiteSpace(login))
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
         return Results.Unauthorized();
-
-    var user = await userService.GetOrCreateAsync(login, ct);
 
     var defect = await db.Defects.FindAsync([id], ct);
     if (defect is null) return Results.NotFound();
@@ -413,7 +525,7 @@ app.MapPost("/api/defects/{id:guid}/take", async (
 
     await db.SaveChangesAsync(ct);
     return Results.Ok(new { id = defect.Id, status = "InProgress" });
-});
+}).RequireAuthorization();
 
 app.MapPost("/api/defects/{id:guid}/photos", async (
     Guid id,
@@ -423,11 +535,9 @@ app.MapPost("/api/defects/{id:guid}/photos", async (
     PhotoService photoService,
     CancellationToken ct) =>
 {
-    var login = httpContext.Request.Headers["X-User-Login"].ToString();
-    if (string.IsNullOrWhiteSpace(login))
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
         return Results.Unauthorized();
-
-    var user = await userService.GetOrCreateAsync(login, ct);
 
     var defect = await db.Defects.FindAsync([id], ct);
     if (defect is null) return Results.NotFound();
@@ -471,21 +581,18 @@ app.MapPost("/api/defects/{id:guid}/photos", async (
         SizeBytes = p.SizeBytes,
         UploadedAt = p.UploadedAt
     }).ToList());
-});
+}).RequireAuthorization();
 
 app.MapPost("/api/defects/{id:guid}/fix", async (
     Guid id,
     FixDefectRequest req,
     HttpContext httpContext,
     AppDbContext db,
-    UserService userService,
     CancellationToken ct) =>
 {
-    var login = httpContext.Request.Headers["X-User-Login"].ToString();
-    if (string.IsNullOrWhiteSpace(login))
+    var user = await GetCurrentUserAsync(httpContext.User, db, ct);
+    if (user is null)
         return Results.Unauthorized();
-
-    var user = await userService.GetOrCreateAsync(login, ct);
 
     var defect = await db.Defects
         .Include(d => d.Photos)
@@ -514,7 +621,6 @@ app.MapPost("/api/defects/{id:guid}/fix", async (
     {
         DefectId = defect.Id,
         Comment = req.Comment,
-        ConfirmedByUserId = user.Id,
         ConfirmedAt = now,
         AfterPhotosCount = afterPhotos.Count
     });
@@ -680,3 +786,41 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.Run();
+
+static async Task<AppUser?> GetCurrentUserAsync(ClaimsPrincipal principal, AppDbContext db, CancellationToken ct)
+{
+    var userIdValue = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (!Guid.TryParse(userIdValue, out var userId))
+        return null;
+
+    return await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+}
+
+static string CreateToken(AppUser user, string issuer, string audience, string signingKey)
+{
+    var credentials = new SigningCredentials(
+        new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+        SecurityAlgorithms.HmacSha256);
+
+    var claims = new[]
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.Login)
+    };
+
+    var token = new JwtSecurityToken(
+        issuer: issuer,
+        audience: audience,
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(12),
+        signingCredentials: credentials);
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+static UserDto ToUserDto(AppUser user) => new()
+{
+    Id = user.Id,
+    Login = user.Login,
+    CreatedAt = user.CreatedAt
+};

@@ -27,7 +27,7 @@ public sealed class AppDbContext : DbContext
             e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
             e.Property(x => x.Login).HasColumnName("login").IsRequired();
             e.HasIndex(x => x.Login).IsUnique();
-            e.Property(x => x.DisplayName).HasColumnName("display_name");
+            e.Property(x => x.PasswordHash).HasColumnName("password_hash").IsRequired();
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 

@@ -1,9 +1,8 @@
-namespace SnowOps.Api.Domain.Entities;
+namespace SnowOps.Api.Contracts;
 
-public sealed class AppUser
+public sealed class UserDto
 {
     public Guid Id { get; set; }
     public string Login { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
 }
