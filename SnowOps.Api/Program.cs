@@ -46,6 +46,7 @@ app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionServic
 
     return Results.Ok(new VisionAnalyzeResponse
     {
+        Engine = result.Engine,
         Label = result.Label switch
         {
             RoadCoverLabel.Ice => "Гололед",
@@ -64,6 +65,7 @@ app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionServic
         Features = result.Features
     });
 })
-.Accepts<IFormFile>("multipart/form-data");
+.Accepts<IFormFile>("multipart/form-data")
+.DisableAntiforgery();
 
 app.Run();

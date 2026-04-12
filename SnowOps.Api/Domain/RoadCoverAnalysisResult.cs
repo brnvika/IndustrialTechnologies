@@ -2,6 +2,7 @@ namespace SnowOps.Api.Domain;
 
 public sealed class RoadCoverAnalysisResult
 {
+    public string Engine { get; set; } = "heuristic";
     public RoadCoverLabel Label { get; set; }
     public double Confidence { get; set; }
     public double IceScore { get; set; }

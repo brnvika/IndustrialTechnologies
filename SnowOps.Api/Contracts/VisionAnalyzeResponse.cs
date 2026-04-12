@@ -2,6 +2,7 @@ namespace SnowOps.Api.Contracts;
 
 public sealed class VisionAnalyzeResponse
 {
+    public string Engine { get; set; } = "heuristic";
     public string Label { get; set; } = string.Empty;
     public double Confidence { get; set; }
     public double IceScore { get; set; }
