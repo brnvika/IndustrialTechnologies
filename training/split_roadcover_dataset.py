@@ -7,14 +7,37 @@ from pathlib import Path
 
 from PIL import Image
 
-LABELS = ["ice", "loose_snow", "snowdrift", "snowbank_crosswalk"]
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif"}
+try:
+    import pillow_avif  # noqa: F401
+except Exception:
+    pillow_avif = None
+
+LABELS = ["clean_road", "ice", "loose_snow", "snowbank_crosswalk", "snowdrift"]
+LABEL_ALIASES = {
+    "ice": ["ice"],
+    "loose_snow": ["loose_snow", "looseSnow"],
+    "snowdrift": ["snowdrift"],
+    "snowbank_crosswalk": ["snowbank_crosswalk", "snowbankCrosswalk"],
+    "clean_road": ["clean_road", "cleanRoad", "cleanroad"]
+}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif", ".avif"}
 
 
 def collect_images(label_dir: Path) -> list[Path]:
-    return sorted(
+    candidates = sorted(
         [p for p in label_dir.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS]
     )
+    valid: list[Path] = []
+    for path in candidates:
+        try:
+            with Image.open(path) as image:
+                image.verify()
+            valid.append(path)
+        except Exception:
+            # Skip corrupted or unsupported files to keep split reproducible.
+            continue
+
+    return valid
 
 
 def copy_as_jpeg(source: Path, destination: Path) -> None:
@@ -47,11 +70,11 @@ def main() -> None:
             (target / split / label).mkdir(parents=True, exist_ok=True)
 
     for label in LABELS:
-        label_source = source / label
-        if not label_source.exists():
-            raise SystemExit(f"Missing class folder: {label_source}")
+        source_candidate = next((source / alias for alias in LABEL_ALIASES[label] if (source / alias).exists()), None)
+        if source_candidate is None:
+            raise SystemExit(f"Missing class folder for '{label}'. Expected one of: {LABEL_ALIASES[label]}")
 
-        images = collect_images(label_source)
+        images = collect_images(source_candidate)
         if len(images) < 2:
             raise SystemExit(f"Need at least 2 images in class '{label}', got {len(images)}")
 

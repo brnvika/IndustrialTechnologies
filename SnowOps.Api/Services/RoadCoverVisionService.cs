@@ -94,14 +94,15 @@ public sealed class RoadCoverVisionService : IDisposable
 
             var labels = _options.Labels.Count == probabilities.Length
                 ? _options.Labels
-                : new List<string> { "ice", "loose_snow", "snowdrift", "snowbank_crosswalk" };
+                : new List<string> { "clean_road", "ice", "loose_snow", "snowbank_crosswalk", "snowdrift" };
 
             var scoreMap = new Dictionary<RoadCoverLabel, double>
             {
                 [RoadCoverLabel.Ice] = 0,
                 [RoadCoverLabel.LooseSnow] = 0,
                 [RoadCoverLabel.Snowdrift] = 0,
-                [RoadCoverLabel.SnowBankAtCrosswalk] = 0
+                [RoadCoverLabel.SnowBankAtCrosswalk] = 0,
+                [RoadCoverLabel.CleanRoad] = 0
             };
 
             for (var i = 0; i < Math.Min(labels.Count, probabilities.Length); i++)
@@ -113,7 +114,8 @@ public sealed class RoadCoverVisionService : IDisposable
                 }
             }
 
-            var best = scoreMap.OrderByDescending(x => x.Value).First();
+            // Resolve common ambiguity between snowdrift and snowbank near crosswalk.
+            var best = SelectBestLabel(scoreMap);
             result = new RoadCoverAnalysisResult
             {
                 Engine = "onnx",
@@ -123,6 +125,7 @@ public sealed class RoadCoverVisionService : IDisposable
                 LooseSnowScore = Math.Round(scoreMap[RoadCoverLabel.LooseSnow], 3),
                 SnowdriftScore = Math.Round(scoreMap[RoadCoverLabel.Snowdrift], 3),
                 SnowBankAtCrosswalkScore = Math.Round(scoreMap[RoadCoverLabel.SnowBankAtCrosswalk], 3),
+                CleanRoadScore = Math.Round(scoreMap[RoadCoverLabel.CleanRoad], 3),
                 Width = source.Width,
                 Height = source.Height,
                 Features = new Dictionary<string, double>
@@ -195,6 +198,22 @@ public sealed class RoadCoverVisionService : IDisposable
         return Softmax(values);
     }
 
+    private static KeyValuePair<RoadCoverLabel, double> SelectBestLabel(Dictionary<RoadCoverLabel, double> scoreMap)
+    {
+        var best = scoreMap.OrderByDescending(x => x.Value).First();
+
+        var crosswalk = scoreMap[RoadCoverLabel.SnowBankAtCrosswalk];
+        var snowdrift = scoreMap[RoadCoverLabel.Snowdrift];
+
+        // Promote crosswalk when model is uncertain between these two visually similar classes.
+        if (best.Key == RoadCoverLabel.Snowdrift && crosswalk >= 0.33 && crosswalk / Math.Max(snowdrift, 1e-6) >= 0.55)
+        {
+            return new KeyValuePair<RoadCoverLabel, double>(RoadCoverLabel.SnowBankAtCrosswalk, crosswalk);
+        }
+
+        return best;
+    }
+
     private static RoadCoverLabel? ParseLabel(string value)
     {
         var normalized = value.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
@@ -204,6 +223,8 @@ public sealed class RoadCoverVisionService : IDisposable
             "loose_snow" => RoadCoverLabel.LooseSnow,
             "snowdrift" => RoadCoverLabel.Snowdrift,
             "snowbank_crosswalk" => RoadCoverLabel.SnowBankAtCrosswalk,
+            "clean_road" => RoadCoverLabel.CleanRoad,
+            "cleanroad" => RoadCoverLabel.CleanRoad,
             _ => null
         };
     }
@@ -306,12 +327,20 @@ public sealed class RoadCoverVisionService : IDisposable
             (0.15 * Clamp01((largestComponentAspect - 1.2) / 3.0))
         );
 
+        var cleanRoadScore = Clamp01(
+            (0.45 * darkRatio) +
+            (0.25 * (1.0 - whiteRatio)) +
+            (0.20 * (1.0 - bottomQuarterWhiteRatio)) +
+            (0.10 * (1.0 - lowerThirdWhiteRatio))
+        );
+
         var scores = new Dictionary<RoadCoverLabel, double>
         {
             [RoadCoverLabel.Ice] = iceScore,
             [RoadCoverLabel.LooseSnow] = looseSnowScore,
             [RoadCoverLabel.Snowdrift] = snowdriftScore,
-            [RoadCoverLabel.SnowBankAtCrosswalk] = snowBankScore
+            [RoadCoverLabel.SnowBankAtCrosswalk] = snowBankScore,
+            [RoadCoverLabel.CleanRoad] = cleanRoadScore
         };
 
         var best = scores.OrderByDescending(x => x.Value).First();
@@ -327,6 +356,7 @@ public sealed class RoadCoverVisionService : IDisposable
             LooseSnowScore = Math.Round(looseSnowScore, 3),
             SnowdriftScore = Math.Round(snowdriftScore, 3),
             SnowBankAtCrosswalkScore = Math.Round(snowBankScore, 3),
+            CleanRoadScore = Math.Round(cleanRoadScore, 3),
             Width = width,
             Height = height,
             Features = new Dictionary<string, double>
@@ -342,7 +372,8 @@ public sealed class RoadCoverVisionService : IDisposable
                 ["bottomHorizontalBandRatio"] = Math.Round(bottomHorizontalBandRatio, 3),
                 ["largestBrightComponentAreaRatio"] = Math.Round(largestComponentAreaRatio, 3),
                 ["largestBrightComponentAspect"] = Math.Round(largestComponentAspect, 3),
-                ["brightComponentCountNormalized"] = Math.Round(componentCountNormalized, 3)
+                ["brightComponentCountNormalized"] = Math.Round(componentCountNormalized, 3),
+                ["cleanRoadScore"] = Math.Round(cleanRoadScore, 3)
             }
         };
     }

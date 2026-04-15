@@ -178,6 +178,7 @@
         <div><span>Рыхлый снег</span><span id="scoreLoose">-</span></div>
         <div><span>Сугробы</span><span id="scoreDrift">-</span></div>
         <div><span>Снежный вал</span><span id="scoreBank">-</span></div>
+        <div><span>Чистая дорога</span><span id="scoreClean">-</span></div>
       </div>
     </div>
   </section>
@@ -198,6 +199,7 @@
     const scoreLooseEl = document.getElementById("scoreLoose");
     const scoreDriftEl = document.getElementById("scoreDrift");
     const scoreBankEl = document.getElementById("scoreBank");
+    const scoreCleanEl = document.getElementById("scoreClean");
 
     photoInput.addEventListener("change", () => {
       resultBox.style.display = "none";
@@ -250,6 +252,7 @@
         scoreLooseEl.textContent = Math.round((data.looseSnowScore || 0) * 100) + "%";
         scoreDriftEl.textContent = Math.round((data.snowdriftScore || 0) * 100) + "%";
         scoreBankEl.textContent = Math.round((data.snowBankAtCrosswalkScore || 0) * 100) + "%";
+        scoreCleanEl.textContent = Math.round((data.cleanRoadScore || 0) * 100) + "%";
 
         resultBox.style.display = "block";
         statusEl.textContent = "Готово.";

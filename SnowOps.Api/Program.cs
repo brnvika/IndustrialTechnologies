@@ -53,6 +53,7 @@ app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionServic
             RoadCoverLabel.LooseSnow => "Рыхлый снег",
             RoadCoverLabel.Snowdrift => "Сугробы",
             RoadCoverLabel.SnowBankAtCrosswalk => "Снежный вал у перехода",
+            RoadCoverLabel.CleanRoad => "Чистая дорога без осадков",
             _ => "Неопределено"
         },
         Confidence = result.Confidence,
@@ -60,6 +61,7 @@ app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionServic
         LooseSnowScore = result.LooseSnowScore,
         SnowdriftScore = result.SnowdriftScore,
         SnowBankAtCrosswalkScore = result.SnowBankAtCrosswalkScore,
+        CleanRoadScore = result.CleanRoadScore,
         Width = result.Width,
         Height = result.Height,
         Features = result.Features

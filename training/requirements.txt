@@ -3,3 +3,4 @@ onnx==1.16.2
 onnxruntime==1.19.2
 numpy==1.26.4
 Pillow==10.4.0
+pillow-avif-plugin==1.5.2

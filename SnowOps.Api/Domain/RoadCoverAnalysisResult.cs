@@ -9,6 +9,7 @@ public sealed class RoadCoverAnalysisResult
     public double LooseSnowScore { get; set; }
     public double SnowdriftScore { get; set; }
     public double SnowBankAtCrosswalkScore { get; set; }
+    public double CleanRoadScore { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public Dictionary<string, double> Features { get; set; } = new();

@@ -7,11 +7,16 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+try:
+    import pillow_avif  # noqa: F401
+except Exception:
+    pillow_avif = None
 from ultralytics import YOLO
 
 
-LABELS = ["ice", "loose_snow", "snowdrift", "snowbank_crosswalk"]
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif"}
+LABELS = ["clean_road", "ice", "loose_snow", "snowbank_crosswalk", "snowdrift"]
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif", ".avif"}
 
 
 def main() -> None:

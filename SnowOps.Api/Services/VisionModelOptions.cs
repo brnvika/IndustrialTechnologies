@@ -8,10 +8,11 @@ public sealed class VisionModelOptions
     public int ImageSize { get; set; } = 224;
     public List<string> Labels { get; set; } = new()
     {
+        "clean_road",
         "ice",
         "loose_snow",
-        "snowdrift",
-        "snowbank_crosswalk"
+        "snowbank_crosswalk",
+        "snowdrift"
     };
 
     public List<float> Mean { get; set; } = new() { 0.485f, 0.456f, 0.406f };
