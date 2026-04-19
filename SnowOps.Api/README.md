@@ -1,93 +1,41 @@
-# SnowOps.Api
+# SnowOps.Api MVP
 
-C# backend for monitoring snow cover, cleaning zones, and employee work reports.
+Минимальный backend для одного сценария:
+- загрузить фото дороги,
+- определить тип дефекта покрытия.
 
 ## Stack
 - ASP.NET Core Web API (.NET 9)
-- PostgreSQL
-- Dapper + Npgsql
+- SixLabors.ImageSharp
+- ONNX Runtime (для инференса обученной модели)
 
-## Run PostgreSQL locally (Docker)
-
-```powershell
-docker run --name snowops-postgres `
-  -e POSTGRES_USER=postgres `
-  -e POSTGRES_PASSWORD=postgres `
-  -e POSTGRES_DB=snowops `
-  -p 5432:5432 -d postgres:16
-```
-
-## Configure connection string
-
-Default connection string is in:
-- appsettings.json
-- appsettings.Development.json
-
-## Start API
+## Запуск
 
 ```powershell
 dotnet run
 ```
 
-On startup API auto-creates schema and adds demo seed data.
+После запуска открой:
+- `http://localhost:5104/` - веб-интерфейс загрузки фото
+- `http://localhost:5104/api/health` - health check
 
-## Endpoints
+## API
 
 - `GET /api/health`
-- `GET /api/zones`
-- `POST /api/zones`
-- `GET /api/tasks?snowOrIce=true&status=work&owner=brnvika&type=Гололёд&minRisk=3&maxRisk=10`
-- `GET /api/tasks/{id}`
-- `POST /api/tasks?createdBy=dispatcher`
-- `POST /api/tasks/{id}/take`
-- `POST /api/tasks/{id}/fix`
-- `GET /api/work-reports?hours=24`
-- `GET /api/reports/summary?hours=8&snowOrIce=true`
-- `POST /api/vision/analyze` with `multipart/form-data` and field `photo`
+- `POST /api/vision/analyze` (`multipart/form-data`, поле `photo`)
 
-## Example payloads
-
-Create task:
-
-```json
-{
-  "zoneId": 1,
-  "type": "Гололёд",
-  "coveragePercent": 80,
-  "photos": ["https://example.com/photo1.jpg"]
-}
-```
-
-Take task in work:
-
-```json
-{
-  "employee": "brnvika"
-}
-```
-
-Fix task:
-
-```json
-{
-  "employee": "brnvika",
-  "comment": "Убрали наледь, посыпали реагентом",
-  "photoUrls": ["https://example.com/fix1.jpg"]
-}
-```
-
-Photo analysis:
+Пример:
 
 ```powershell
 curl -X POST http://localhost:5104/api/vision/analyze ^
   -F "photo=@road.jpg"
 ```
 
-Response example:
+Пример ответа:
 
 ```json
 {
-  "label": "Гололёд",
+  "label": "Гололед",
   "confidence": 0.74,
   "iceScore": 0.81,
   "looseSnowScore": 0.22,
@@ -100,3 +48,53 @@ Response example:
   }
 }
 ```
+
+## Обучение своей модели
+
+В корне проекта есть папка `training` с полным пайплайном.
+
+1. Установи зависимости Python:
+
+```powershell
+pip install -r training\requirements.txt
+```
+
+2. Подготовь исходный датасет по классам:
+
+```text
+D:\SnowOpsData\raw_roadcover_dataset\
+  ice\
+  loose_snow\
+  snowdrift\
+  snowbank_crosswalk\
+```
+
+3. Раздели на train/val:
+
+```powershell
+python training\split_roadcover_dataset.py --source D:\SnowOpsData\raw_roadcover_dataset --target D:\SnowOpsData\roadcover_dataset
+```
+
+4. Обучи и экспортируй ONNX прямо в API:
+
+```powershell
+python training\train_roadcover.py --dataset D:\SnowOpsData\roadcover_dataset --model-output SnowOps.Api\models\roadcover.onnx
+```
+
+По умолчанию используется более сильная базовая модель `yolov8s-cls.pt`, поэтому обучение идет дольше, но обычно лучше разделяет похожие классы вроде `ice` и `snowbank_crosswalk`.
+
+Если хочешь именно дообучить уже полученную модель на новых примерах, укажи свои веса через `--weights`:
+
+```powershell
+python training\train_roadcover.py --weights training\runs\roadcover\weights\best.pt --dataset D:\SnowOpsData\roadcover_dataset --model-output SnowOps.Api\models\roadcover.onnx
+```
+
+Для твоего случая лучше всего добавлять больше сложных примеров, где `ice` и `loose_snow` визуально похожи, и потом прогонять обучение ещё раз на обновлённом датасете.
+
+5. Оцени качество на валидации:
+
+```powershell
+python training\evaluate_roadcover.py --dataset D:\SnowOpsData\roadcover_dataset\val --model SnowOps.Api\models\roadcover.onnx
+```
+
+6. Перезапусти API. Если модель загружена, в ответе `POST /api/vision/analyze` будет `"engine": "onnx"`. Если модель отсутствует или невалидна, сервис автоматически переключится на `"engine": "heuristic"`.

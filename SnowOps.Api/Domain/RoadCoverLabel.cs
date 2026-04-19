@@ -5,5 +5,6 @@ public enum RoadCoverLabel
     Ice,
     LooseSnow,
     Snowdrift,
-    SnowBankAtCrosswalk
+    SnowBankAtCrosswalk,
+    CleanRoad
 }
