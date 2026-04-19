@@ -1,11 +1,20 @@
 using SnowOps.Api.Contracts;
 using SnowOps.Api.Domain;
 using SnowOps.Api.Services;
+using SnowOps.Api.Services.Notifiers;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<RoadCoverVisionService>();
+builder.Services.AddSingleton<IMockAddressProvider, MockAddressProvider>();
+
+builder.Services.AddHttpClient(); 
+builder.Services.AddSingleton<TelegramInteractionWorker>();
+builder.Services.AddSingleton<IDefectNotifier>(x => x.GetRequiredService<TelegramInteractionWorker>());
+builder.Services.AddHostedService(x => x.GetRequiredService<TelegramInteractionWorker>());
+builder.Services.AddHttpClient<IDefectNotifier, WebhookDefectNotifier>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("frontend", policy =>
@@ -34,28 +43,42 @@ app.MapGet("/", async context =>
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SnowOps.Api" }));
 
-app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionService visionService, CancellationToken cancellationToken) =>
+app.MapPost("/api/vision/analyze", async (IFormFile photo, RoadCoverVisionService visionService, IEnumerable<IDefectNotifier> notifiers, IMockAddressProvider addressProvider, CancellationToken cancellationToken) =>
 {
     if (photo is null || photo.Length == 0)
     {
         return Results.BadRequest(new { error = "Photo is required" });
     }
 
-    await using var stream = photo.OpenReadStream();
-    var result = await visionService.AnalyzeAsync(stream, cancellationToken);
+    using var memoryStream = new MemoryStream();
+    await photo.CopyToAsync(memoryStream, cancellationToken);
+    var photoBytes = memoryStream.ToArray();
+
+    memoryStream.Position = 0;
+    var result = await visionService.AnalyzeAsync(memoryStream, cancellationToken);
+
+    var labelString = result.Label switch
+    {
+        RoadCoverLabel.Ice => "Гололед",
+        RoadCoverLabel.LooseSnow => "Рыхлый снег",
+        RoadCoverLabel.Snowdrift => "Сугробы",
+        RoadCoverLabel.SnowBankAtCrosswalk => "Снежный вал у перехода",
+        RoadCoverLabel.CleanRoad => "Чистая дорога без осадков",
+        _ => "Неопределено"
+    };
+
+    // Если это дефект, требующий внимания, и уверенность выше 50%
+    if (result.Label != RoadCoverLabel.CleanRoad && result.Confidence > 0.5f)
+    {
+        var address = addressProvider.GetRandomMoscowAddress();
+        var notifyTasks = notifiers.Select(n => n.NotifyAsync(labelString, address, photoBytes, cancellationToken));
+        await Task.WhenAll(notifyTasks);
+    }
 
     return Results.Ok(new VisionAnalyzeResponse
     {
         Engine = result.Engine,
-        Label = result.Label switch
-        {
-            RoadCoverLabel.Ice => "Гололед",
-            RoadCoverLabel.LooseSnow => "Рыхлый снег",
-            RoadCoverLabel.Snowdrift => "Сугробы",
-            RoadCoverLabel.SnowBankAtCrosswalk => "Снежный вал у перехода",
-            RoadCoverLabel.CleanRoad => "Чистая дорога без осадков",
-            _ => "Неопределено"
-        },
+        Label = labelString,
         Confidence = result.Confidence,
         IceScore = result.IceScore,
         LooseSnowScore = result.LooseSnowScore,
